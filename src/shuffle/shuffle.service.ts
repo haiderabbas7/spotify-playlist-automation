@@ -61,8 +61,8 @@ export class ShuffleService {
             const MIN_WEIGHT = 50;
             const BASE_WEIGHT = 500;
             //TODO: für die zwei konstanten hier bessere namen überlegen
-            const WEIGHT_LOWERING_RATE = 0.5
-            const WEIGHT_INCREASE_RATE = 1.1
+            const WEIGHT_LOWERING_RATE = 0.5;
+            const WEIGHT_INCREASE_RATE = 1.1;
             const playlist =
                 await this.playlistService.getPlaylistByIDOnlyNecessaryInfo(playlist_id);
             //const playlist_name = playlist.name
@@ -132,7 +132,9 @@ export class ShuffleService {
                     /*WICHTIG: google oder überleg dir eine bessere idee hier die weights anzupassen
                      *  halbieren bei auswahl und +10% ist glaube nicht so schlecht, aber es gibt safe fairere möglichkeiten*/
                     if (isInShuffledTracks) {
-                        const new_weight = Math.round(Math.max(track.weight * WEIGHT_LOWERING_RATE, MIN_WEIGHT));
+                        const new_weight = Math.round(
+                            Math.max(track.weight * WEIGHT_LOWERING_RATE, MIN_WEIGHT),
+                        );
                         await this.lowDBService.updateWeight(playlist_id, track.uri, new_weight);
                     } else {
                         const new_weight = Math.round(track.weight * WEIGHT_INCREASE_RATE);

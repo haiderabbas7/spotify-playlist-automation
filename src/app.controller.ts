@@ -18,7 +18,7 @@ export class AppController {
         this.scope =
             'user-read-playback-state user-read-recently-played playlist-modify-public playlist-modify-private';
         this.client_id = this.configService.get<string>('CLIENT_ID');
-        this.redirect_uri = 'http://localhost:' + this.configService.get<string>('PORT') + '/';
+        this.redirect_uri = 'http://127.0.0.1:' + this.configService.get<string>('PORT') + '/';
     }
 
     @Get()
