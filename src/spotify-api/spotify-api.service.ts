@@ -17,9 +17,7 @@ export class SpotifyApiService {
         private readonly helperService: HelperService,
     ) {}
 
-    /*WICHTIG: schreib eine zentrale error handling methode handleError, welche ich in den catch blöcken unten immer aufrufe
-       dadurch weniger kopieren, redundanz und ich kann da zentral das verhalten definieren
-       UND WICHTIG MACH DAS OHNE GPT, dadurch zwinge ich mich fehler im code selber zu erkennen*/
+    //TODO: "ALT: ZENTRALE ERROR HANDLING METHODE SCHREIBEN"
 
     async sendPutCall(endpoint: string, data: any, params: Record<string, any> = {}): Promise<any> {
         const back_off_time = this.start_backoff_time;

@@ -129,8 +129,6 @@ export class ShuffleService {
                     );
 
                     //abhängig davon ob der song letztes mal ausgewählt wurde passt er das weighting an
-                    /*WICHTIG: google oder überleg dir eine bessere idee hier die weights anzupassen
-                     *  halbieren bei auswahl und +10% ist glaube nicht so schlecht, aber es gibt safe fairere möglichkeiten*/
                     if (isInShuffledTracks) {
                         const new_weight = Math.round(
                             Math.max(track.weight * WEIGHT_LOWERING_RATE, MIN_WEIGHT),
@@ -184,10 +182,10 @@ export class ShuffleService {
                 all_tracks.splice(i, 0, all_tracks.splice(track_index, 1)[0]);
 
                 //fügt den geshuffleden song zur lowdb hinzu für nächstes mal
-                /*OPTIONAL: hier könnte man ja die geshufflden tracks in einer variablen halten
-                 *  und dann mit einer neuen methode direkt in einem stück in die lowdb schreiben
-                 *  also nicht für N tracks N awaits sondern nur ein await
-                 *  aber joa weiß nicht ob das so großartig viel performance increase gibt tbh*/
+                /*TODO: hier könnte man ja die geshufflden tracks in einer variablen halten
+                    und dann mit einer neuen methode direkt in einem stück in die lowdb schreiben
+                    also nicht für N tracks N awaits sondern nur ein await
+                    aber joa weiß nicht ob das so großartig viel performance increase gibt tbh*/
                 await this.lowDBService.addShuffledTrack(
                     playlist_id,
                     chosen_track.uri,

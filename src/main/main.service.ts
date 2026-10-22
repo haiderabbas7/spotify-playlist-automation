@@ -11,11 +11,7 @@ import { LowDbService } from '../low-db/low-db.service';
 import { promises as fs } from 'fs';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
-//TODO: hier und überall service die imports optimieren
-
-//TODO: hier und überall ungenutzte injected services ausm konstruktor hauen
-
-//TODO: hier und überall so warnings beheben, vllt sonarqube holen und laufen lassen
+//TODO: "AM ENDE: CODE AUFRÄUMEN"
 
 @Injectable()
 export class MainService {
@@ -60,8 +56,7 @@ export class MainService {
         } else {
             if (playlists_to_shuffle) {
                 for (const playlist_id of playlists_to_shuffle) {
-                    const playlist =
-                        await this.playlistService.getPlaylistByIDOnlyNecessaryInfo(playlist_id);
+                    const playlist = await this.playlistService.getPlaylistByIDOnlyNecessaryInfo(playlist_id);
                     const playlist_name = playlist.name;
                     this.helperService.printWithTimestamp(`Shuffling playlist "${playlist_name}"`);
                     const start_time = Date.now();

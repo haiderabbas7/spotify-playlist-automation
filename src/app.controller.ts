@@ -49,8 +49,7 @@ export class AppController {
         //wichtig: hier darf kein await dranstehen, damit das HTML direkt angeschickt werden kann
         this.mainService.startShuffleApplication(true);
 
-        /*WICHTIG: google nochmal ordentlich, ob sich eine möglichkeit finden lässt, mit dem ich den tab hier schließen kann
-         *  weil ich gib mich nicht geschlagen damit, dass man den Tab selber schließen muss*/
+        //TODO: "ALT: TAB AUTOMATISCH SCHLIEßEN LASSEN"
 
         return `
             <html lang="en">
@@ -81,6 +80,4 @@ export class AppController {
     async shuffle(@Req() req: Request) {
         this.mainService.startShuffleApplication();
     }
-
-    /*OPTIONAL: mach hier eine route config, womit ich vllt paar sachen konfigurieren kann. wird halt iwie persistiert*/
 }
