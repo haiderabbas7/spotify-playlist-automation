@@ -52,6 +52,7 @@ export class SpotifyApiService {
                         `${status}: Token expired, fetching new token...`,
                         true,
                     );
+                    this.authService.invalidateAccessToken();
                     access_token = await this.authService.getAccessToken();
                     /*} else if (status === 404) {
                         // Behandle 404 hier, ohne zu werfen
@@ -117,6 +118,7 @@ export class SpotifyApiService {
                         `${status}: Token expired, fetching new token...`,
                         true,
                     );
+                    this.authService.invalidateAccessToken();
                     access_token = await this.authService.getAccessToken();
                     /*} else if (status === 404) {
                     // Behandle 404 hier, ohne zu werfen
