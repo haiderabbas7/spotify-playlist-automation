@@ -1,5 +1,4 @@
 import { Injectable } from '@nestjs/common';
-import { HelperService } from '../helper/helper.service';
 import { JSONFilePreset } from 'lowdb/node';
 
 type Track = {
@@ -20,18 +19,10 @@ type Data = {
 
 @Injectable()
 export class LowDbService {
-    constructor(private readonly helperService: HelperService) {}
-
     private async getDB() {
         const db = await JSONFilePreset<Data>('lowdb.json', { playlists: [] });
         await db.read();
         return db;
-    }
-
-    async resetDB() {
-        const db = await this.getDB();
-        db.data.playlists = [];
-        await db.write();
     }
 
     async doesPlaylistExist(playlist_id: string): Promise<boolean> {
@@ -50,16 +41,6 @@ export class LowDbService {
         };
         db.data.playlists.push(playlist);
         await db.write();
-    }
-
-    async getPlaylist(playlist_id: string) {
-        const db = await this.getDB();
-        const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
-        if (!playlist) {
-            throw new Error(`Playlist mit der ID ${playlist_id} wurde nicht gefunden.`);
-        } else {
-            return playlist;
-        }
     }
 
     async getSnapshotID(playlist_id: string) {

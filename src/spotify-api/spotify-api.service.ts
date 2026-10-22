@@ -1,151 +1,167 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { AuthService } from '../auth/auth.service';
 import { HelperService } from '../helper/helper.service';
 import { firstValueFrom } from 'rxjs';
-import { AxiosError } from 'axios';
+import { isAxiosError, Method } from 'axios';
+
+type RequestOptions = {
+    params?: Record<string, any>;
+    data?: any;
+};
+
+/**
+ * Kompakter Fehler für fehlgeschlagene Spotify-Calls
+ * statt des riesigen Axios-Fehlerobjekts, das früher das Log zugemüllt hat
+ */
+export class SpotifyApiError extends Error {
+    constructor(
+        message: string,
+        readonly status: number | undefined,
+    ) {
+        super(message);
+        this.name = 'SpotifyApiError';
+    }
+}
 
 @Injectable()
 export class SpotifyApiService {
-    private readonly max_attempts: number = 3;
+    private static readonly BASE_URL = 'https://api.spotify.com/v1/';
+    private readonly max_attempts: number = 4;
     private readonly start_backoff_time: number = 1000;
     constructor(
-        private readonly configService: ConfigService,
         private readonly httpService: HttpService,
         private readonly authService: AuthService,
         private readonly helperService: HelperService,
     ) {}
 
-    //TODO: "ALT: ZENTRALE ERROR HANDLING METHODE SCHREIBEN"
-
-    async sendPutCall(endpoint: string, data: any, params: Record<string, any> = {}): Promise<any> {
-        const back_off_time = this.start_backoff_time;
-        let access_token = await this.authService.getAccessToken();
-
-        for (let attempts: number = 1; attempts <= this.max_attempts; attempts++) {
-            try {
-                const response = await firstValueFrom(
-                    this.httpService.put(`https://api.spotify.com/v1/${endpoint}`, data, {
-                        headers: { Authorization: `Bearer ${access_token}` },
-                        params,
-                    }),
-                );
-
-                if (response.status >= 200 && response.status < 300) {
-                    /*return {
-                        data: response.data,
-                        status: response.status,
-                    };*/
-                    return response.data;
-                }
-
-                // Fehler für Status 400-599
-                throw new Error(`API call failed with status ${response.status}`);
-            } catch (error) {
-                const axiosError = error as AxiosError;
-                const status = axiosError.response?.status;
-
-                if (status === 401) {
-                    // Token erneuern
-                    this.helperService.printWithTimestamp(
-                        `${status}: Token expired, fetching new token...`,
-                        true,
-                    );
-                    this.authService.invalidateAccessToken();
-                    access_token = await this.authService.getAccessToken();
-                    /*} else if (status === 404) {
-                        // Behandle 404 hier, ohne zu werfen
-                        return { data: null, status: 404 }; // oder was auch immer du zurückgeben möchtest*/
-                } else if (status === 429 || status === 500) {
-                    // Exponential Backoff
-                    const wait_time = back_off_time * Math.pow(2, attempts - 1);
-                    if (status === 429) {
-                        this.helperService.printWithTimestamp(
-                            `${status}: Rate Limit exceeded at ${endpoint}, waiting ${wait_time / 1000}s...`,
-                            true,
-                        );
-                    } else {
-                        this.helperService.printWithTimestamp(
-                            `${status}: Timeout, waiting ${wait_time / 1000}s...`,
-                            true,
-                        );
-                    }
-                    await new Promise((resolve) => setTimeout(resolve, wait_time));
-                } else {
-                    this.helperService.printWithTimestamp(
-                        `Unknown error (${status}): ${axiosError.response?.data}`,
-                        true,
-                    );
-                    throw error;
-                }
-            }
-        }
-        // Wenn alle Versuche fehlschlagen:
-        throw new Error(`Maximale Anzahl an Versuchen erreicht für ${endpoint}`);
+    async sendGetCall(endpoint: string, params: Record<string, any> = {}): Promise<any> {
+        return this.request('GET', endpoint, { params });
     }
 
-    async sendGetCall(endpoint: string, params: Record<string, any> = {}): Promise<any> {
-        const back_off_time = this.start_backoff_time; // Startwert für Backoff
-        let access_token = await this.authService.getAccessToken(); // Token einmalig holen
+    async sendPostCall(
+        endpoint: string,
+        data: any,
+        params: Record<string, any> = {},
+    ): Promise<any> {
+        return this.request('POST', endpoint, { data, params });
+    }
 
-        for (let attempts: number = 1; attempts <= this.max_attempts; attempts++) {
+    async sendPutCall(endpoint: string, data: any, params: Record<string, any> = {}): Promise<any> {
+        return this.request('PUT', endpoint, { data, params });
+    }
+
+    async sendDeleteCall(
+        endpoint: string,
+        data: any,
+        params: Record<string, any> = {},
+    ): Promise<any> {
+        return this.request('DELETE', endpoint, { data, params });
+    }
+
+    /**
+     * Lädt alle Seiten einer Liste (alles mit items + next, z.B. Playlist-Items oder eigene Playlists)
+     * WICHTIG: wenn man fields angibt, muss next mit drin sein, sonst wird nur die erste Seite geladen
+     */
+    async getAllPages(endpoint: string, params: Record<string, any> = {}): Promise<any[]> {
+        let items: any[] = [];
+        let next_url: string | null = endpoint;
+        let is_first_page = true;
+        do {
+            //next ist eine komplette URL, in der die params schon drin stecken
+            const data: any = await this.sendGetCall(next_url, is_first_page ? params : {});
+            items = items.concat(data.items);
+            next_url = data.next ?? null;
+            is_first_page = false;
+        } while (next_url !== null);
+        return items;
+    }
+
+    /**
+     * Zentrale Methode für alle Calls, mit Retry bei:
+     * 401 (Token abgelaufen, wird erneuert), 429 (Rate Limit, wartet so lange wie Spotify sagt),
+     * 5xx (Spotify hat Probleme) und Netzwerkfehlern (Internet kurz weg)
+     */
+    private async request(method: Method, endpoint: string, options: RequestOptions): Promise<any> {
+        const url = endpoint.startsWith('http') ? endpoint : SpotifyApiService.BASE_URL + endpoint;
+        for (let attempt: number = 1; attempt <= this.max_attempts; attempt++) {
+            const access_token = await this.authService.getAccessToken();
             try {
                 const response = await firstValueFrom(
-                    this.httpService.get(`https://api.spotify.com/v1/${endpoint}`, {
+                    this.httpService.request({
+                        method,
+                        url,
+                        params: options.params,
+                        data: options.data,
                         headers: { Authorization: `Bearer ${access_token}` },
-                        params,
                     }),
                 );
-
-                if (response.status >= 200 && response.status < 300) {
-                    /*return {
-                        data: response.data,
-                        status: response.status,
-                    };*/
-                    return response.data;
-                }
-
-                // Fällt in den Bereich 400-599 und ist kein 2xx Status
-                throw new Error(`API call failed with status ${response.status}`);
+                return response.data;
             } catch (error) {
-                const axiosError = error as AxiosError;
-                const status = axiosError.response?.status;
-
-                if (status === 401) {
-                    // Token erneuern
-                    this.helperService.printWithTimestamp(
-                        `${status}: Token expired, fetching new token...`,
-                        true,
-                    );
-                    this.authService.invalidateAccessToken();
-                    access_token = await this.authService.getAccessToken();
-                    /*} else if (status === 404) {
-                    // Behandle 404 hier, ohne zu werfen
-                    return { data: null, status: 404 }; // oder was auch immer du zurückgeben möchtest*/
-                } else if (status === 429 || status === 500) {
-                    // Exponential Backoff
-                    const wait_time = back_off_time * Math.pow(2, attempts - 1);
-                    if (status === 429) {
-                        this.helperService.printWithTimestamp(
-                            `${status}: Rate Limit exceeded at ${endpoint}, waiting ${wait_time / 1000}s...`,
-                        );
-                    } else {
-                        this.helperService.printWithTimestamp(
-                            `${status}: Rate Limit exceeded at ${endpoint}, waiting ${wait_time / 1000}s...`,
-                        );
-                    }
-                    await new Promise((resolve) => setTimeout(resolve, wait_time));
-                } else {
-                    this.helperService.printWithTimestamp(
-                        `Unknown error (${status}): ${axiosError.response?.data}`,
-                        true,
-                    );
-                    throw error;
+                const wait_time = this.getRetryWaitTime(error, attempt, endpoint);
+                if (wait_time === null || attempt === this.max_attempts) {
+                    throw this.toSpotifyApiError(error, method, endpoint);
                 }
+                await new Promise((resolve) => setTimeout(resolve, wait_time));
             }
         }
-        // Wenn alle Versuche fehlschlagen:
-        throw new Error(`Maximale Anzahl an Versuchen erreicht für ${endpoint}`);
+        //wird nie erreicht, weil der letzte Versuch oben immer returned oder wirft
+        throw new SpotifyApiError(`${method} ${endpoint} failed`, undefined);
+    }
+
+    /**
+     * Gibt zurück, wie lange vor dem nächsten Versuch gewartet wird, oder null, wenn ein Retry sinnlos ist
+     */
+    private getRetryWaitTime(error: unknown, attempt: number, endpoint: string): number | null {
+        if (!isAxiosError(error)) {
+            return null;
+        }
+        const status = error.response?.status;
+        const back_off_time = this.start_backoff_time * Math.pow(2, attempt - 1);
+
+        if (status === 401) {
+            this.helperService.printWithTimestamp(
+                `401: Token expired, fetching new token...`,
+                true,
+            );
+            this.authService.invalidateAccessToken();
+            return 0;
+        }
+        if (status === 429) {
+            const retry_after = Number(error.response?.headers['retry-after']);
+            const wait_time = retry_after > 0 ? retry_after * 1000 : back_off_time;
+            this.helperService.printWithTimestamp(
+                `429: Rate Limit exceeded at ${endpoint}, waiting ${wait_time / 1000}s...`,
+                true,
+            );
+            return wait_time;
+        }
+        if (status !== undefined && status >= 500) {
+            this.helperService.printWithTimestamp(
+                `${status}: Spotify server error at ${endpoint}, waiting ${back_off_time / 1000}s...`,
+                true,
+            );
+            return back_off_time;
+        }
+        if (status === undefined) {
+            this.helperService.printWithTimestamp(
+                `Network error at ${endpoint} (${error.code}), waiting ${back_off_time / 1000}s...`,
+                true,
+            );
+            return back_off_time;
+        }
+        return null;
+    }
+
+    private toSpotifyApiError(error: unknown, method: Method, endpoint: string): SpotifyApiError {
+        if (isAxiosError(error)) {
+            const status = error.response?.status;
+            const details = error.response ? JSON.stringify(error.response.data) : error.code;
+            return new SpotifyApiError(
+                `${method} ${endpoint} failed (${status ?? 'no response'}): ${details}`,
+                status,
+            );
+        }
+        return new SpotifyApiError(`${method} ${endpoint} failed: ${String(error)}`, undefined);
     }
 }

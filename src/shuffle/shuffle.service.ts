@@ -5,7 +5,6 @@ import { UserService } from '../user/user.service';
 import { HelperService } from '../helper/helper.service';
 import { LowDbService } from '../low-db/low-db.service';
 import * as lodash from 'lodash';
-import { SpotifyApiService } from '../spotify-api/spotify-api.service';
 
 @Injectable()
 export class ShuffleService {
@@ -16,7 +15,6 @@ export class ShuffleService {
         private readonly userService: UserService,
         private readonly helperService: HelperService,
         private readonly lowDBService: LowDbService,
-        private readonly spotifyApiService: SpotifyApiService,
     ) {}
 
     async determinePlaylistsToShuffle(x_hours_back: number = 2): Promise<string[]> {
@@ -31,9 +29,9 @@ export class ShuffleService {
 
         //fragt nach ob momentan eine playlist am laufen ist und deleted sie aus dem array
         //deleten kann nicht error erzeugen wenn playlist nicht drin ist
-        const currently_playing_playlist: any =
+        const currently_playing_playlist: string | null =
             await this.userService.getCurrentlyPlayingPlaylist();
-        if (currently_playing_playlist !== '') {
+        if (currently_playing_playlist !== null) {
             shuffle_these_playlists.delete(currently_playing_playlist);
         }
 
@@ -65,9 +63,7 @@ export class ShuffleService {
             const WEIGHT_INCREASE_RATE = 1.1;
             const playlist =
                 await this.playlistService.getPlaylistByIDOnlyNecessaryInfo(playlist_id);
-            //const playlist_name = playlist.name
-            //this.helperService.printWithTimestamp(`Shuffling playlist "${playlist_name}"`);
-            const playlist_size = playlist.tracks.total;
+            const playlist_size = playlist.items.total;
             const all_tracks =
                 await this.trackService.getTracksOfPlaylistByIDOnlyNecessaryInfo(playlist_id);
             let new_snapshot_id = playlist.snapshot_id;
@@ -86,7 +82,7 @@ export class ShuffleService {
                 if (new_snapshot_id !== snapshot_id_after_last_shuffle) {
                     //reduziert die track arrays auf ihre uris, macht den code einfach chilliger
                     const all_tracks_reduced_to_uris: string[] = all_tracks.map(
-                        (track) => track.track.uri,
+                        (track) => track.item.uri,
                     );
                     const weighted_tracks_reduced_to_uris: string[] = weighted_tracks.map(
                         (track) => track.uri,
@@ -146,7 +142,7 @@ export class ShuffleService {
             else {
                 await this.lowDBService.addPlaylist(playlist_id);
                 for (const track of all_tracks) {
-                    await this.lowDBService.addTrack(playlist_id, track.track.uri, BASE_WEIGHT);
+                    await this.lowDBService.addTrack(playlist_id, track.item.uri, BASE_WEIGHT);
                 }
                 /*OPTIONAL: ich muss ja nicht die tracks neu von der lowdb anfragen
                  *  stattdessen kann ich sie auch einfach mit base weight lokal speichern und damit arbeiten
@@ -169,7 +165,7 @@ export class ShuffleService {
                  *  der fehler kam bei tests von mir, aber ich konnte es danach nicht mehr wieder reproduzieren
                  *  nur damit du bescheid weißt*/
                 const track_index = all_tracks.findIndex(
-                    (track) => track.track.uri === chosen_track.uri,
+                    (track) => track.item.uri === chosen_track.uri,
                 );
                 new_snapshot_id = await this.playlistService.reorderPlaylistByID(
                     playlist_id,
@@ -200,10 +196,9 @@ export class ShuffleService {
     }
 
     async insertionShuffle(playlist_id: string, shuffle_amount: any = null): Promise<any> {
-        const playlist = await this.playlistService.getPlaylistByID(playlist_id);
-        const playlist_size: number = playlist.tracks.total;
+        const playlist = await this.playlistService.getPlaylistByIDOnlyNecessaryInfo(playlist_id);
+        const playlist_size: number = playlist.items.total;
         let snapshot_id: string = playlist.snapshot_id;
-        //this.helperService.printWithTimestamp(`Shuffling playlist "${playlist.name}`);
         shuffle_amount = this.determineShuffleAmount(playlist_size, shuffle_amount);
         for (let i: number = 0; i < shuffle_amount; i++) {
             //random number from interval [i; playlist_size-1]
@@ -215,39 +210,5 @@ export class ShuffleService {
                 snapshot_id,
             );
         }
-    }
-
-    //TODO: entf am ende, war zum testen
-    async resetTestPlaylistCopy() {
-        await this.spotifyApiService.sendPutCall(`playlists/6eEJAP7U12nFve8GLYQYnd/tracks`, {
-            uris: [
-                'spotify:track:2SuyyRbbciDBXEZerQ6PE1', //A
-                'spotify:track:7t1FUkqJRdQdNrkjwfhq2H', //B
-                'spotify:track:4WRObjXa0sC21wa3laZI1o', //C.
-                'spotify:track:6E1ejRJAfE8BC4T1Dc8DNo', //D
-                'spotify:track:76owXCPDaZVFNDmxEG4lV6', //E
-                'spotify:track:275keYpPKRdTP0J1ctG9Ca', //F
-                'spotify:track:3hpB5SlyESKXrmc6NUNQhd', //G
-                'spotify:track:4fPFfvvegZQ12DIH1t3y4G', //H
-                'spotify:track:2FQviMkaoixlgWuGL4u1EO', //I
-                'spotify:track:2QuKpAI5kmgdwCbApdB4wT', //J
-                'spotify:track:4jnyL0WIJB0iRRPFNj1BeL', //K
-                'spotify:track:4Dk7gOIyslQ5tTkapDfYGh', //L
-                'spotify:track:2iyEvZdipDeCmSW8v8PA32', //M
-                'spotify:track:6DwF5IUONr6L0aSmxYyT0V', //N
-                'spotify:track:2qgTvtCVbQ18SQ4ZDVUlMB', //O
-                'spotify:track:7JiLZJlFMVANgEeBo7BvmL', //P
-                'spotify:track:6upnQQE6IwsgPgxASNt7GM', //Q
-                'spotify:track:45jaPXs1EROGdFRtT0T8Sx', //R
-                'spotify:track:3ynqGo5QvzIvKnfAahXatd', //S
-                'spotify:track:4db54JOdAm7OnDqjpWy1uj', //T
-                'spotify:track:1fckVDRsaql38b9GfMjZ6x', //U
-                'spotify:track:7BaQc1OYz1gMedTlMRRhkT', //V
-                'spotify:track:2BWQIsuarfRoeqmnPvRO97', //W
-                'spotify:track:5YUyW9opqNsMSEzzecZih1', //X
-                'spotify:track:3e9z7v3fc6KBXACJwj0St1', //Y
-                'spotify:track:4L8rZacefAFsbYBI6iqQgz', //Z
-            ],
-        });
     }
 }
