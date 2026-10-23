@@ -62,3 +62,6 @@ tokens.json
 
 # Einstellungen (manuell bearbeitet)
 /settings.json
+
+# Gedächtnis der Queue-Routine
+/routine.json

@@ -29,11 +29,17 @@ export class SpotifyApiService {
     private static readonly BASE_URL = 'https://api.spotify.com/v1/';
     private readonly max_attempts: number = 4;
     private readonly start_backoff_time: number = 1000;
+    //zählt alle Calls seit dem Start, damit z.B. die Routine loggen kann, wie viele sie gebraucht hat
+    private call_count: number = 0;
     constructor(
         private readonly httpService: HttpService,
         private readonly authService: AuthService,
         private readonly helperService: HelperService,
     ) {}
+
+    getCallCount(): number {
+        return this.call_count;
+    }
 
     async sendGetCall(endpoint: string, params: Record<string, any> = {}): Promise<any> {
         return this.request('GET', endpoint, { params });
@@ -86,6 +92,7 @@ export class SpotifyApiService {
         const url = endpoint.startsWith('http') ? endpoint : SpotifyApiService.BASE_URL + endpoint;
         for (let attempt: number = 1; attempt <= this.max_attempts; attempt++) {
             const access_token = await this.authService.getAccessToken();
+            this.call_count++;
             try {
                 const response = await firstValueFrom(
                     this.httpService.request({

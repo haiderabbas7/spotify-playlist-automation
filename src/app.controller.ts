@@ -36,6 +36,12 @@ export class AppController {
         void this.mainService.startShuffleApplication();
     }
 
+    @Get('/routine')
+    routine() {
+        void this.mainService.startRoutineNow();
+        return this.getHTMLPage('Routine started, check the log 👀');
+    }
+
     private getHTMLPage(message: string): string {
         return `
             <html lang="en">

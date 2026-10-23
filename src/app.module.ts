@@ -13,6 +13,7 @@ import { HelperService } from './helper/helper.service';
 import { SpotifyApiService } from './spotify-api/spotify-api.service';
 import { LowDbService } from './low-db/low-db.service';
 import { SettingsService } from './settings/settings.service';
+import { RoutineService } from './routine/routine.service';
 
 @Module({
     imports: [
@@ -34,6 +35,7 @@ import { SettingsService } from './settings/settings.service';
         SpotifyApiService,
         LowDbService,
         SettingsService,
+        RoutineService,
     ],
 })
 export class AppModule {}

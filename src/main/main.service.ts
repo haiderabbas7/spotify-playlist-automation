@@ -6,6 +6,7 @@ import { PlaylistService } from '../playlist/playlist.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { AuthService } from '../auth/auth.service';
 import { SettingsService } from '../settings/settings.service';
+import { RoutineService } from '../routine/routine.service';
 
 @Injectable()
 export class MainService {
@@ -16,7 +17,11 @@ export class MainService {
         private readonly playlistService: PlaylistService,
         private readonly authService: AuthService,
         private readonly settingsService: SettingsService,
+        private readonly routineService: RoutineService,
     ) {}
+
+    //alle Läufe (Routine + Shuffle) hängen sich hier hintereinander, damit nie zwei gleichzeitig laufen
+    private task_chain: Promise<void> = Promise.resolve();
 
     /**
      * Wird einmal beim Start der App aufgerufen
@@ -60,22 +65,59 @@ export class MainService {
         return null;
     }
 
+    /**
+     * Läuft stündlich, einmal nach dem Start (is_initial) und manuell über /shuffle
+     * erst die Queue-Routine (beim Start immer, sonst nur wenn sie über 20 Stunden nicht lief), dann der Shuffle
+     */
     @Cron(CronExpression.EVERY_HOUR)
     async startShuffleApplication(is_initial: boolean = false) {
-        if (!this.authService.isLoggedIn()) {
-            this.helperService.printWithTimestamp('Not logged in yet, skipping shuffle...');
-            return;
-        }
-        if (!(await this.settingsService.getSettings()).shuffle_enabled) {
-            this.helperService.printWithTimestamp('Shuffling is disabled in settings.json');
-            return;
-        }
+        await this.runExclusive(async () => {
+            if (!this.authService.isLoggedIn()) {
+                this.helperService.printWithTimestamp('Not logged in yet, skipping...');
+                return;
+            }
+            await this.runRoutine(is_initial);
+            if (!(await this.settingsService.getSettings()).shuffle_enabled) {
+                this.helperService.printWithTimestamp('Shuffling is disabled in settings.json');
+                return;
+            }
+            try {
+                await this.shuffleListenedPlaylists(is_initial);
+            } catch (error) {
+                //damit ein Fehler nicht als riesiger Stacktrace vom Scheduler im Log landet
+                this.helperService.printWithTimestamp(`Shuffle run failed: ${error}`, true);
+            }
+        });
+    }
+
+    /**
+     * Stößt nur die Routine an, sofort und unabhängig davon, wann sie zuletzt lief (Route /routine, zum Testen)
+     */
+    async startRoutineNow() {
+        await this.runExclusive(async () => {
+            if (!this.authService.isLoggedIn()) {
+                this.helperService.printWithTimestamp('Not logged in yet, skipping...');
+                return;
+            }
+            await this.runRoutine(true);
+        });
+    }
+
+    private async runRoutine(force: boolean) {
         try {
-            await this.shuffleListenedPlaylists(is_initial);
+            if (force || (await this.routineService.isDue())) {
+                await this.routineService.run();
+            }
         } catch (error) {
-            //damit ein Fehler nicht als riesiger Stacktrace vom Scheduler im Log landet
-            this.helperService.printWithTimestamp(`Shuffle run failed: ${error}`, true);
+            //ein Fehler in der Routine soll den Shuffle nicht verhindern
+            this.helperService.printWithTimestamp(`Routine failed: ${error}`, true);
         }
+    }
+
+    private async runExclusive(task: () => Promise<void>) {
+        const run = this.task_chain.then(task);
+        this.task_chain = run.catch(() => undefined);
+        await run;
     }
 
     private async shuffleListenedPlaylists(is_initial: boolean) {
