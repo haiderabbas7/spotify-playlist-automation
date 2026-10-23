@@ -5,6 +5,9 @@ import { SpotifyApiService } from '../spotify-api/spotify-api.service';
 export class TrackService {
     constructor(private readonly spotifyApiService: SpotifyApiService) {}
 
+    /**
+     * Alle Songs einer Playlist, aber nur URI und is_local
+     */
     async getTracksOfPlaylistByIDOnlyNecessaryInfo(playlist_id: string) {
         return await this.getTracksOfPlaylistByID(playlist_id, 'next,items(is_local,item(uri))');
     }

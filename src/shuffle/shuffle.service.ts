@@ -17,6 +17,10 @@ export class ShuffleService {
         private readonly lowDBService: LowDbService,
     ) {}
 
+    /**
+     * Bestimmt die Playlists, die geshuffled werden sollen:
+     * alle eigenen Playlists, die in den letzten x Stunden gehört wurden, außer der, die gerade läuft
+     */
     async determinePlaylistsToShuffle(x_hours_back: number = 2): Promise<string[]> {
         const shuffle_these_playlists: Set<string> = new Set<string>();
 
@@ -50,6 +54,11 @@ export class ShuffleService {
             : Math.min(playlist_size, shuffle_amount);
     }
 
+    /**
+     * Der eigentliche Shuffle: besetzt die ersten shuffle_amount Positionen der Playlist per gewichtetem Roulette neu
+     * Songs, die beim letzten Shuffle vorne waren, verlieren Gewicht, alle anderen gewinnen etwas dazu
+     * Gewichte und zuletzt geshuffelte Songs liegen pro Playlist in der lowdb
+     */
     async dynamicWeightedShuffle(playlist_id: string, shuffle_amount: number = 0) {
         try {
             /*OPTIONAL: ich frag hier einmal nur nach total, name und snapshot id und einmal nur nach den tracks
@@ -195,6 +204,9 @@ export class ShuffleService {
         }
     }
 
+    /**
+     * Einfacher Zufalls-Shuffle ohne Gewichte, wird nur als Fallback benutzt, wenn dynamicWeightedShuffle fehlschlägt
+     */
     async insertionShuffle(playlist_id: string, shuffle_amount: any = null): Promise<any> {
         const playlist = await this.playlistService.getPlaylistByIDOnlyNecessaryInfo(playlist_id);
         const playlist_size: number = playlist.items.total;

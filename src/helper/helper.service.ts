@@ -61,10 +61,16 @@ export class HelperService {
         });
     }
 
+    /**
+     * Wartet die angegebene Anzahl Sekunden
+     */
     async wait(seconds: number) {
         await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
     }
 
+    /**
+     * Aktuelle Zeit in deutscher Zeit als "DD.MM. HH:MM", für Logs und den Shuffle-Zeitstempel
+     */
     getCurrentTimestampFormatted(): string {
         const now = new Date();
         return now

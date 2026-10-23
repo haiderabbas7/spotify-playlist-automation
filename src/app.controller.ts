@@ -10,12 +10,18 @@ export class AppController {
         private readonly mainService: MainService,
     ) {}
 
+    /**
+     * Route /: leitet auf die Spotify-Login-Seite weiter
+     */
     @Get()
     @Redirect()
     login() {
         return { url: this.authService.getLoginURL() };
     }
 
+    /**
+     * Route /start: Callback nach dem Spotify-Login, speichert die Tokens und startet den ersten Lauf (Routine + Shuffle)
+     */
     @Get('/start')
     async startApplication(@Req() req: Request) {
         if (typeof req.query.code !== 'string') {
@@ -31,17 +37,26 @@ export class AppController {
         return this.getHTMLPage('Close the tab vro...👅👅👅👅👅');
     }
 
+    /**
+     * Route /shuffle: stößt einen Lauf manuell an (Routine nur, wenn sie fällig ist, dann Shuffle)
+     */
     @Get('/shuffle')
     shuffle() {
         void this.mainService.startShuffleApplication();
     }
 
+    /**
+     * Route /routine: stößt nur die Queue-Routine an, sofort
+     */
     @Get('/routine')
     routine() {
         void this.mainService.startRoutineNow();
         return this.getHTMLPage('Routine started, check the log 👀');
     }
 
+    /**
+     * Kleine HTML-Seite mit einer Nachricht, als Antwort auf die Routen
+     */
     private getHTMLPage(message: string): string {
         return `
             <html lang="en">

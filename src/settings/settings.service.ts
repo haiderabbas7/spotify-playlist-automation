@@ -34,6 +34,9 @@ export class SettingsService {
 
     constructor(private readonly helperService: HelperService) {}
 
+    /**
+     * Liest settings.json, legt sie bei Bedarf an und ergänzt fehlende Einträge
+     */
     async getSettings(): Promise<Settings> {
         let content: string;
         try {
@@ -67,6 +70,9 @@ export class SettingsService {
         return settings;
     }
 
+    /**
+     * Schreibt die Einstellungen formatiert in settings.json
+     */
     private async writeSettings(settings: Settings) {
         await fs.writeFile(SettingsService.SETTINGS_FILE, JSON.stringify(settings, null, 4));
     }

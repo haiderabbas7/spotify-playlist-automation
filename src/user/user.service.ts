@@ -11,6 +11,9 @@ export class UserService {
         private readonly spotifyApiService: SpotifyApiService,
     ) {}
 
+    /**
+     * Haiders Spotify User-ID aus der .env
+     */
     getUserID() {
         return this.configService.get<string>('MY_USER_ID');
     }

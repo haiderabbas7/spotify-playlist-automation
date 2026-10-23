@@ -66,10 +66,16 @@ export class AuthService {
         this.client_secret = this.configService.get<string>('CLIENT_SECRET') ?? '';
     }
 
+    /**
+     * Callback-Adresse nach dem Spotify-Login, muss genau so im Spotify Developer Dashboard eingetragen sein
+     */
     getRedirectURI(): string {
         return `http://127.0.0.1:${this.configService.get<string>('PORT')}/start`;
     }
 
+    /**
+     * Adresse der Spotify-Login-Seite mit allen Scopes, darauf leitet die Route / weiter
+     */
     getLoginURL(): string {
         return (
             'https://accounts.spotify.com/authorize?' +
@@ -115,10 +121,17 @@ export class AuthService {
         }
     }
 
+    /**
+     * true, sobald ein gültiger Login geladen oder neu geholt wurde
+     */
     isLoggedIn(): boolean {
         return this.tokens !== null;
     }
 
+    /**
+     * Gibt einen gültigen Access Token zurück, ist er (fast) abgelaufen, wird er vorher mit dem Refresh Token erneuert
+     * wirft LoginRequiredError, wenn es keinen Login gibt
+     */
     async getAccessToken(): Promise<string> {
         if (!this.tokens) {
             throw new LoginRequiredError('Not logged in');
@@ -143,6 +156,9 @@ export class AuthService {
         }
     }
 
+    /**
+     * Tauscht den Code aus dem Login-Callback gegen Tokens und speichert sie in tokens.json
+     */
     async requestTokens(code: string) {
         const response = await this.sendTokenRequest({
             grant_type: 'authorization_code',
@@ -152,6 +168,9 @@ export class AuthService {
         await this.saveTokens(response);
     }
 
+    /**
+     * Holt mit dem Refresh Token einen neuen Access Token und speichert ihn
+     */
     private async refreshToken(): Promise<string> {
         if (!this.tokens) {
             throw new LoginRequiredError('Not logged in');
@@ -164,6 +183,9 @@ export class AuthService {
         return this.tokens.access_token;
     }
 
+    /**
+     * Speichert die Tokens im Speicher und in tokens.json
+     */
     private async saveTokens(response: TokenResponse) {
         this.tokens = {
             access_token: response.access_token,
@@ -175,6 +197,9 @@ export class AuthService {
         await fs.writeFile(AuthService.TOKEN_FILE, JSON.stringify(this.tokens, null, 4));
     }
 
+    /**
+     * Liest tokens.json, null wenn die Datei fehlt, kaputt ist oder keinen Refresh Token enthält
+     */
     private async readTokenFile(): Promise<StoredTokens | null> {
         try {
             const content = await fs.readFile(AuthService.TOKEN_FILE, 'utf8');
@@ -186,11 +211,18 @@ export class AuthService {
         }
     }
 
+    /**
+     * Die Scopes aus SCOPES, denen beim gespeicherten Login noch nicht zugestimmt wurde
+     */
     private getMissingScopes(granted_scope: string): string[] {
         const granted = granted_scope.split(' ');
         return AuthService.SCOPES.filter((scope) => !granted.includes(scope));
     }
 
+    /**
+     * POST an accounts.spotify.com/api/token, für den ersten Login und für jeden Refresh
+     * ein 400 wird zu LoginRequiredError, alles andere (z.B. kein Internet) wird normal weitergeworfen
+     */
     private async sendTokenRequest(post_data: Record<string, string>): Promise<TokenResponse> {
         try {
             const response = await lastValueFrom(

@@ -103,6 +103,9 @@ export class MainService {
         });
     }
 
+    /**
+     * Startet die Routine, wenn force gesetzt oder sie fällig ist, Fehler werden nur geloggt
+     */
     private async runRoutine(force: boolean) {
         try {
             if (force || (await this.routineService.isDue())) {
@@ -114,12 +117,18 @@ export class MainService {
         }
     }
 
+    /**
+     * Hängt eine Aufgabe hinten an die Warteschlange, sie startet erst, wenn die vorherige fertig ist
+     */
     private async runExclusive(task: () => Promise<void>) {
         const run = this.task_chain.then(task);
         this.task_chain = run.catch(() => undefined);
         await run;
     }
 
+    /**
+     * Shuffled alle Playlists, die in den letzten 24 (Start) bzw. 2 Stunden gehört wurden, und setzt danach den Zeitstempel
+     */
     private async shuffleListenedPlaylists(is_initial: boolean) {
         const look_x_hours_back = is_initial ? 24 : 2;
         const playlists_to_shuffle: string[] =

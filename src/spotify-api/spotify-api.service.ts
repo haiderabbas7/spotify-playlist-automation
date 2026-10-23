@@ -37,14 +37,23 @@ export class SpotifyApiService {
         private readonly helperService: HelperService,
     ) {}
 
+    /**
+     * Anzahl aller API-Calls seit dem Start der App
+     */
     getCallCount(): number {
         return this.call_count;
     }
 
+    /**
+     * GET auf einen Spotify-Endpoint, z.B. "me/playlists", gibt die Antwort zurück
+     */
     async sendGetCall(endpoint: string, params: Record<string, any> = {}): Promise<any> {
         return this.request('GET', endpoint, { params });
     }
 
+    /**
+     * POST auf einen Spotify-Endpoint, data ist der JSON-Body
+     */
     async sendPostCall(
         endpoint: string,
         data: any,
@@ -53,10 +62,16 @@ export class SpotifyApiService {
         return this.request('POST', endpoint, { data, params });
     }
 
+    /**
+     * PUT auf einen Spotify-Endpoint, data ist der JSON-Body
+     */
     async sendPutCall(endpoint: string, data: any, params: Record<string, any> = {}): Promise<any> {
         return this.request('PUT', endpoint, { data, params });
     }
 
+    /**
+     * DELETE auf einen Spotify-Endpoint, data ist der JSON-Body
+     */
     async sendDeleteCall(
         endpoint: string,
         data: any,
@@ -160,6 +175,9 @@ export class SpotifyApiService {
         return null;
     }
 
+    /**
+     * Macht aus einem Axios-Fehler einen kurzen SpotifyApiError mit Methode, Endpoint, Status und Spotify-Meldung
+     */
     private toSpotifyApiError(error: unknown, method: Method, endpoint: string): SpotifyApiError {
         if (isAxiosError(error)) {
             const status = error.response?.status;

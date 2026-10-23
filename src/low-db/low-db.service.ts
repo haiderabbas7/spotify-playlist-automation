@@ -19,18 +19,27 @@ type Data = {
 
 @Injectable()
 export class LowDbService {
+    /**
+     * Liest lowdb.json bei jedem Zugriff neu ein, damit immer der aktuelle Stand benutzt wird
+     */
     private async getDB() {
         const db = await JSONFilePreset<Data>('lowdb.json', { playlists: [] });
         await db.read();
         return db;
     }
 
+    /**
+     * true, wenn die Playlist schon mal geshuffled wurde und deshalb in der lowdb steht
+     */
     async doesPlaylistExist(playlist_id: string): Promise<boolean> {
         const db = await this.getDB();
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
         return !!playlist;
     }
 
+    /**
+     * Legt einen leeren Eintrag für eine Playlist an
+     */
     async addPlaylist(playlist_id: string) {
         const db = await this.getDB();
         const playlist: Playlist = {
@@ -43,6 +52,9 @@ export class LowDbService {
         await db.write();
     }
 
+    /**
+     * snapshot_id der Playlist nach dem letzten Shuffle
+     */
     async getSnapshotID(playlist_id: string) {
         const db = await this.getDB();
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
@@ -53,6 +65,9 @@ export class LowDbService {
         return playlist.snapshot_id;
     }
 
+    /**
+     * Speichert die snapshot_id nach einem Shuffle, darüber werden später Änderungen an der Playlist erkannt
+     */
     async setSnapshotID(playlist_id: string, snapshot_id: string) {
         const db = await this.getDB();
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
@@ -63,6 +78,9 @@ export class LowDbService {
         await db.write();
     }
 
+    /**
+     * Fügt einen Song mit Startgewicht zu den Gewichten einer Playlist hinzu
+     */
     async addTrack(playlist_id: string, uri: string, weight: number) {
         const db = await this.getDB();
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
@@ -74,6 +92,9 @@ export class LowDbService {
         await db.write();
     }
 
+    /**
+     * Setzt das Gewicht eines Songs in einer Playlist
+     */
     async updateWeight(playlist_id: string, uri: string, weight: number) {
         const db = await this.getDB();
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
@@ -92,6 +113,9 @@ export class LowDbService {
         await db.write();
     }
 
+    /**
+     * Alle Songs einer Playlist mit ihrem Gewicht
+     */
     async getTracks(playlist_id: string) {
         const db = await this.getDB();
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
@@ -123,6 +147,9 @@ export class LowDbService {
         await db.write();
     }
 
+    /**
+     * Die Songs, die beim letzten Shuffle nach vorne gekommen sind
+     */
     async getLastShuffledTracks(playlist_id: string) {
         const db = await this.getDB();
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
@@ -134,6 +161,9 @@ export class LowDbService {
         return playlist.last_shuffled_tracks || [];
     }
 
+    /**
+     * Leert die Liste der zuletzt geshuffelten Songs, passiert vor jedem neuen Shuffle
+     */
     async clearLastShuffledTracks(playlist_id: string) {
         const db = await this.getDB();
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
@@ -145,6 +175,9 @@ export class LowDbService {
         await db.write();
     }
 
+    /**
+     * Merkt sich einen Song als "beim letzten Shuffle vorne", für die Gewichtung beim nächsten Mal
+     */
     async addShuffledTrack(playlist_id: string, uri: string, weight: number) {
         const db = await this.getDB();
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);

@@ -17,10 +17,16 @@ export class PlaylistService {
         private readonly spotifyApiService: SpotifyApiService,
     ) {}
 
+    /**
+     * true, wenn die Playlist Haider gehört (owner = MY_USER_ID aus der .env)
+     */
     isOwnPlaylist(playlist: any): boolean {
         return playlist.owner.id === this.userService.getUserID();
     }
 
+    /**
+     * IDs aller eigenen Playlists, aus denen in den letzten x Stunden ein Song zu Ende gehört wurde (über recently-played)
+     */
     async getOwnListenedPlaylists(x_hours_back: number = 2): Promise<string[]> {
         const end_date = new Date(Date.now() - x_hours_back * 60 * 60 * 1000);
         const listened_tracks: any[] = await this.trackService.getRecentlyPlayedTracks(end_date);
@@ -42,22 +48,36 @@ export class PlaylistService {
         return [...playlist_ids];
     }
 
+    /**
+     * Alle Playlists, die Haider gehört (gefolgte Playlists anderer User fliegen raus)
+     * die Einträge enthalten u.a. id, name, description, snapshot_id und items.total
+     */
     async getOwnPlaylists(): Promise<any[]> {
         const playlists = await this.spotifyApiService.getAllPages('me/playlists', { limit: 50 });
         //in der Liste können null-Einträge stecken, z.B. bei gelöschten Playlists
         return playlists.filter((playlist) => playlist && this.isOwnPlaylist(playlist));
     }
 
+    /**
+     * Nur name, snapshot_id und Anzahl der Songs einer Playlist
+     */
     async getPlaylistByIDOnlyNecessaryInfo(playlist_id: string) {
         return await this.getPlaylistByID(playlist_id, 'name,snapshot_id,items.total');
     }
 
+    /**
+     * Holt eine Playlist, mit fields kann man die Antwort auf bestimmte Felder begrenzen
+     */
     async getPlaylistByID(playlist_id: string, fields: string = ''): Promise<any> {
         return await this.spotifyApiService.sendGetCall(`playlists/${playlist_id}`, {
             ...(fields && { fields }),
         });
     }
 
+    /**
+     * Verschiebt range_length Songs ab range_start vor die Position insert_before (Indizes 0-basiert)
+     * gibt die neue snapshot_id zurück, die beim nächsten Reorder mitgeschickt wird
+     */
     async reorderPlaylistByID(
         playlist_id: string,
         range_start: number,
@@ -87,6 +107,9 @@ export class PlaylistService {
         return this.helperService.decodeHTMLEntities(playlist.description ?? '');
     }
 
+    /**
+     * Überschreibt die Beschreibung einer Playlist komplett
+     */
     async setPlaylistDescription(playlist_id: string, new_description: string) {
         await this.spotifyApiService.sendPutCall(`playlists/${playlist_id}`, {
             description: new_description,
