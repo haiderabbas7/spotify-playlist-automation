@@ -10,12 +10,12 @@ import { HelperService } from '../helper/helper.service';
 type StoredTokens = {
     access_token: string;
     refresh_token: string;
-    //Zeitpunkt in ms (UTC), ab dem der access token nicht mehr gilt
+    //point in time in ms (UTC) from which the access token is no longer valid
     expires_at: number;
     scope: string;
 };
 
-//Antwort von accounts.spotify.com/api/token, refresh_token und scope fehlen beim Refresh manchmal
+//response of accounts.spotify.com/api/token, refresh_token and scope are sometimes missing on refresh
 type TokenResponse = {
     access_token: string;
     refresh_token?: string;
@@ -24,7 +24,7 @@ type TokenResponse = {
 };
 
 /**
- * Wird geworfen, wenn kein gültiger Login da ist und der User sich im Browser neu einloggen muss
+ * Thrown when there is no valid login and the user has to log in again in the browser
  */
 export class LoginRequiredError extends Error {
     constructor(message: string) {
@@ -35,7 +35,7 @@ export class LoginRequiredError extends Error {
 
 @Injectable()
 export class AuthService {
-    //alle Rechte, die die App braucht. Kommt hier was dazu, muss der User einmal neu zustimmen
+    //all permissions the app needs. If one is added here, the user has to consent once again
     static readonly SCOPES: string[] = [
         'user-read-playback-state',
         'user-read-currently-playing',
@@ -48,13 +48,13 @@ export class AuthService {
         'user-library-modify',
     ];
     private static readonly TOKEN_FILE = 'tokens.json';
-    //access token wird schon eine Minute vor Ablauf erneuert
+    //the access token is renewed one minute before it expires
     private static readonly EXPIRY_BUFFER_MS = 60 * 1000;
 
     private readonly client_id: string;
     private readonly client_secret: string;
     private tokens: StoredTokens | null = null;
-    //laufender Refresh, damit parallele Calls nicht mehrere Refreshes gleichzeitig anstoßen
+    //refresh in progress, so parallel calls do not start several refreshes at once
     private refresh_in_progress: Promise<string> | null = null;
 
     constructor(
@@ -67,14 +67,14 @@ export class AuthService {
     }
 
     /**
-     * Callback-Adresse nach dem Spotify-Login, muss genau so im Spotify Developer Dashboard eingetragen sein
+     * Callback address after the Spotify login, must be registered exactly like this in the Spotify Developer Dashboard
      */
     getRedirectURI(): string {
         return `http://127.0.0.1:${this.configService.get<string>('PORT')}/start`;
     }
 
     /**
-     * Adresse der Spotify-Login-Seite mit allen Scopes, darauf leitet die Route / weiter
+     * Address of the Spotify login page with all scopes, the route / redirects there
      */
     getLoginURL(): string {
         return (
@@ -89,10 +89,10 @@ export class AuthService {
     }
 
     /**
-     * Prüft beim Start, ob ein gespeicherter Login benutzt werden kann
-     * true: es gibt einen gültigen Token mit allen nötigen Scopes, es muss sich niemand einloggen
-     * false: der User muss sich im Browser einloggen (kein Token, Token ungültig oder Scopes fehlen)
-     * Netzwerkfehler werden weitergeworfen, weil man dann nicht weiß, ob der Login gültig ist
+     * Checks on startup whether a saved login can be used
+     * true: there is a valid token with all required scopes, nobody has to log in
+     * false: the user has to log in in the browser (no token, invalid token or missing scopes)
+     * network errors are rethrown, because then it is unknown whether the login is valid
      */
     async hasValidLogin(): Promise<boolean> {
         this.tokens = await this.readTokenFile();
@@ -122,15 +122,15 @@ export class AuthService {
     }
 
     /**
-     * true, sobald ein gültiger Login geladen oder neu geholt wurde
+     * true as soon as a valid login was loaded or newly requested
      */
     isLoggedIn(): boolean {
         return this.tokens !== null;
     }
 
     /**
-     * Gibt einen gültigen Access Token zurück, ist er (fast) abgelaufen, wird er vorher mit dem Refresh Token erneuert
-     * wirft LoginRequiredError, wenn es keinen Login gibt
+     * Returns a valid access token, if it is (almost) expired it is renewed with the refresh token first
+     * throws LoginRequiredError if there is no login
      */
     async getAccessToken(): Promise<string> {
         if (!this.tokens) {
@@ -148,7 +148,7 @@ export class AuthService {
     }
 
     /**
-     * Wird vom SpotifyApiService bei einem 401 aufgerufen, damit beim nächsten getAccessToken neu geholt wird
+     * Called by SpotifyApiService on a 401, so the next getAccessToken requests a new token
      */
     invalidateAccessToken() {
         if (this.tokens) {
@@ -157,7 +157,7 @@ export class AuthService {
     }
 
     /**
-     * Tauscht den Code aus dem Login-Callback gegen Tokens und speichert sie in tokens.json
+     * Exchanges the code from the login callback for tokens and saves them in tokens.json
      */
     async requestTokens(code: string) {
         const response = await this.sendTokenRequest({
@@ -169,7 +169,7 @@ export class AuthService {
     }
 
     /**
-     * Holt mit dem Refresh Token einen neuen Access Token und speichert ihn
+     * Gets a new access token with the refresh token and saves it
      */
     private async refreshToken(): Promise<string> {
         if (!this.tokens) {
@@ -184,12 +184,12 @@ export class AuthService {
     }
 
     /**
-     * Speichert die Tokens im Speicher und in tokens.json
+     * Saves the tokens in memory and in tokens.json
      */
     private async saveTokens(response: TokenResponse) {
         this.tokens = {
             access_token: response.access_token,
-            //Spotify schickt beim Refresh nicht immer einen neuen refresh token mit, dann bleibt der alte gültig
+            //Spotify does not always send a new refresh token on refresh, then the old one stays valid
             refresh_token: response.refresh_token ?? this.tokens?.refresh_token ?? '',
             expires_at: Date.now() + response.expires_in * 1000,
             scope: response.scope ?? this.tokens?.scope ?? '',
@@ -198,7 +198,7 @@ export class AuthService {
     }
 
     /**
-     * Liest tokens.json, null wenn die Datei fehlt, kaputt ist oder keinen Refresh Token enthält
+     * Reads tokens.json, null if the file is missing, broken or contains no refresh token
      */
     private async readTokenFile(): Promise<StoredTokens | null> {
         try {
@@ -206,13 +206,13 @@ export class AuthService {
             const tokens = JSON.parse(content) as StoredTokens;
             return tokens.refresh_token ? tokens : null;
         } catch {
-            //Datei existiert nicht oder ist kaputt, dann einfach neu einloggen
+            //file does not exist or is broken, then just log in again
             return null;
         }
     }
 
     /**
-     * Die Scopes aus SCOPES, denen beim gespeicherten Login noch nicht zugestimmt wurde
+     * The scopes from SCOPES that the saved login has not consented to yet
      */
     private getMissingScopes(granted_scope: string): string[] {
         const granted = granted_scope.split(' ');
@@ -220,8 +220,8 @@ export class AuthService {
     }
 
     /**
-     * POST an accounts.spotify.com/api/token, für den ersten Login und für jeden Refresh
-     * ein 400 wird zu LoginRequiredError, alles andere (z.B. kein Internet) wird normal weitergeworfen
+     * POST to accounts.spotify.com/api/token, for the first login and for every refresh
+     * a 400 becomes LoginRequiredError, everything else (e.g. no internet) is rethrown as is
      */
     private async sendTokenRequest(post_data: Record<string, string>): Promise<TokenResponse> {
         try {
@@ -244,13 +244,13 @@ export class AuthService {
             return response.data;
         } catch (error) {
             const axiosError = error as AxiosError<{ error?: string }>;
-            //400 invalid_grant heißt, der refresh token oder code ist ungültig (z.B. Zugriff in Spotify entzogen)
+            //400 invalid_grant means the refresh token or code is invalid (e.g. access revoked in Spotify)
             if (axiosError.response?.status === 400) {
                 throw new LoginRequiredError(
                     `Spotify rejected the login (${axiosError.response.data?.error ?? 'unknown'}), new login required`,
                 );
             }
-            //alles andere (kein Internet, Spotify down) wird weitergeworfen und nicht als ungültiger Login behandelt
+            //everything else (no internet, Spotify down) is rethrown and not treated as an invalid login
             throw error;
         }
     }

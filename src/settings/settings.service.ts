@@ -3,15 +3,15 @@ import { promises as fs } from 'fs';
 import { HelperService } from '../helper/helper.service';
 
 export type Settings = {
-    //false: es wird nicht mehr geshuffled, alles andere (Login usw.) läuft weiter
+    //false: no more shuffling, everything else (login etc.) keeps running
     shuffle_enabled: boolean;
-    //false: die Queue-Routine läuft nicht
+    //false: the queue routine does not run
     routine_enabled: boolean;
-    //true: die Routine ändert nichts, sondern schreibt nur ins Log, was sie tun würde
+    //true: the routine changes nothing and only logs what it would do
     routine_dry_run: boolean;
-    //Sammel-Playlist (BEHALTEN), aus der die Routine die Songs holt
+    //collect playlist the routine takes the songs from
     collect_playlist_id: string;
-    //Playlist für Songs ohne eindeutige Main (EINSORTIEREN)
+    //playlist for songs without a clear main playlist
     fallback_playlist_id: string;
 };
 
@@ -24,9 +24,9 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 /**
- * Liest settings.json im Projekt-Root, die Datei ist zum manuellen Bearbeiten gedacht
- * wird bei jedem Aufruf neu gelesen, damit Änderungen ohne Neustart greifen
- * fehlen Einträge (z.B. nach einem Update), werden sie mit Standardwerten ergänzt und in die Datei geschrieben
+ * Reads settings.json in the project root, the file is meant to be edited by hand
+ * it is read again on every call, so changes apply without a restart
+ * missing entries (e.g. after an update) are filled with default values and written to the file
  */
 @Injectable()
 export class SettingsService {
@@ -35,14 +35,14 @@ export class SettingsService {
     constructor(private readonly helperService: HelperService) {}
 
     /**
-     * Liest settings.json, legt sie bei Bedarf an und ergänzt fehlende Einträge
+     * Reads settings.json, creates it if needed and adds missing entries
      */
     async getSettings(): Promise<Settings> {
         let content: string;
         try {
             content = await fs.readFile(SettingsService.SETTINGS_FILE, 'utf8');
         } catch {
-            //gibt es die Datei noch nicht, wird sie mit den Standardwerten angelegt
+            //if the file does not exist yet, it is created with the default values
             await this.writeSettings(DEFAULT_SETTINGS);
             this.helperService.printWithTimestamp('Created settings.json with default values');
             return { ...DEFAULT_SETTINGS };
@@ -71,7 +71,7 @@ export class SettingsService {
     }
 
     /**
-     * Schreibt die Einstellungen formatiert in settings.json
+     * Writes the settings formatted to settings.json
      */
     private async writeSettings(settings: Settings) {
         await fs.writeFile(SettingsService.SETTINGS_FILE, JSON.stringify(settings, null, 4));

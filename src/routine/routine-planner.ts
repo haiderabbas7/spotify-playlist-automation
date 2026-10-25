@@ -1,11 +1,11 @@
 /**
- * Entscheidungslogik der Queue-Routine, komplett ohne Spotify-Calls
- * dadurch lässt sie sich mit Jest testen (routine-planner.spec.ts)
+ * Decision logic of the queue routine, without any Spotify calls
+ * so it can be tested with Jest (routine-planner.spec.ts)
  */
 
 export type CollectItem = {
     uri: string;
-    //für das Log, z.B. "Song - Artist"
+    //for the log, e.g. "Song - Artist"
     label: string;
     is_local: boolean;
 };
@@ -14,52 +14,52 @@ export type QueueState = {
     id: string;
     name: string;
     target_id: string;
-    //Inhalt jetzt
+    //content now
     uris: Set<string>;
-    //Inhalt beim letzten Lauf, null wenn die Queue noch nie gesehen wurde
+    //content at the last run, null if the queue was never seen before
     previous_uris: Set<string> | null;
 };
 
 export type PlannerInput = {
     collect_items: CollectItem[];
     queues: QueueState[];
-    //Targets, die existieren und Haider gehören
+    //targets that exist and belong to the user
     valid_target_ids: Set<string>;
-    //Inhalte der geladenen Mains und von EINSORTIEREN, fehlt eine Playlist hier, gilt sie als leer
+    //contents of the loaded mains and the fallback, a playlist missing here counts as empty
     playlist_contents: Map<string, Set<string>>;
     fallback_id: string;
 };
 
 export type SongOrigin =
-    //Haken bei der Queue entfernt, seit dem letzten Lauf aus genau diesen Queues verschwunden
+    //the user removed it from the queue, gone from exactly these queues since the last run
     | 'removed_by_user'
-    //liegt in genau einer Queue
+    //in exactly one queue
     | 'single_queue'
-    //liegt in mehreren Queues mit derselben Main
+    //in several queues with the same main
     | 'same_project'
-    //liegt in Queues mit verschiedenen Mains
+    //in queues with different mains
     | 'different_projects'
-    //liegt in keiner Queue
+    //in no queue
     | 'no_queue'
-    //liegt in keiner Queue, ist aber schon in einer Main
+    //in no queue, but already in a main
     | 'already_in_main'
-    //Local File, kann die API nicht verschieben
+    //local file, the API cannot move it
     | 'local_file';
 
 export type SongPlan = {
     uri: string;
     label: string;
     origin: SongOrigin;
-    //Queues, aus denen der Song kam (fürs Log)
+    //queues the song came from (for the log)
     origin_queue_ids: string[];
-    //null: in keine Playlist einfügen (nur liken)
+    //null: do not add to any playlist (only like)
     target_id: string | null;
-    //false, wenn der Song schon im Target liegt (keine Duplikate)
+    //false if the song is already in the target (no duplicates)
     add_to_target: boolean;
     remove_from_queue_ids: string[];
     like: boolean;
     remove_from_collect: boolean;
-    //z.B. wenn das Target einer Queue nicht mehr existiert
+    //e.g. when the target of a queue no longer exists
     warning: string | null;
 };
 
@@ -69,7 +69,7 @@ export function planRoutine(input: PlannerInput): SongPlan[] {
     const target_ids = new Set(input.queues.map((queue) => queue.target_id));
 
     for (const item of input.collect_items) {
-        //gleicher Song mehrfach in BEHALTEN wird nur einmal verarbeitet
+        //the same song several times in the collect playlist is processed once
         if (seen_uris.has(item.uri)) {
             continue;
         }
@@ -107,7 +107,7 @@ function planSong(item: CollectItem, input: PlannerInput, target_ids: Set<string
     let remove_from: QueueState[];
 
     if (removed_by_user.length > 0) {
-        //Herkunft ist sicher, in anderen Queues bleibt der Song liegen
+        //the origin is certain, the song stays in other queues
         origin = 'removed_by_user';
         origin_queues = removed_by_user;
         remove_from = [];
@@ -138,7 +138,7 @@ function planSong(item: CollectItem, input: PlannerInput, target_ids: Set<string
     } else {
         const origin_targets = [...new Set(origin_queues.map((queue) => queue.target_id))];
         if (origin_targets.length > 1) {
-            //nur möglich, wenn der Haken bei Queues verschiedener Projekte entfernt wurde
+            //only possible if the user removed it from queues of different projects
             target_id = input.fallback_id;
         } else if (!input.valid_target_ids.has(origin_targets[0])) {
             target_id = input.fallback_id;
@@ -163,8 +163,8 @@ function planSong(item: CollectItem, input: PlannerInput, target_ids: Set<string
 }
 
 /**
- * Liest die Target-Tags aus einer Queue-Beschreibung, z.B. {spotify:playlist:0BfYlDPlZlFpDlJxxGNGWi} oder {0BfYlDPlZlFpDlJxxGNGWi}
- * leeres Array: kein Tag, also keine Queue. Mehr als eine ID: ungültig, die Queue wird übersprungen
+ * Reads the target tags from a queue description, e.g. {spotify:playlist:0BfYlDPlZlFpDlJxxGNGWi} or {0BfYlDPlZlFpDlJxxGNGWi}
+ * empty array: no tag, so no queue. More than one ID: invalid, the queue is skipped
  */
 export function parseTargetTags(description: string): string[] {
     const matches = description.matchAll(/\{\s*(?:spotify:playlist:)?([A-Za-z0-9]{22})\s*\}/g);

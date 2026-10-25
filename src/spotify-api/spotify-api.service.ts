@@ -11,8 +11,8 @@ type RequestOptions = {
 };
 
 /**
- * Kompakter Fehler für fehlgeschlagene Spotify-Calls
- * statt des riesigen Axios-Fehlerobjekts, das früher das Log zugemüllt hat
+ * Compact error for failed Spotify calls
+ * instead of the huge Axios error object that used to clutter the log
  */
 export class SpotifyApiError extends Error {
     constructor(
@@ -29,7 +29,7 @@ export class SpotifyApiService {
     private static readonly BASE_URL = 'https://api.spotify.com/v1/';
     private readonly max_attempts: number = 4;
     private readonly start_backoff_time: number = 1000;
-    //zählt alle Calls seit dem Start, damit z.B. die Routine loggen kann, wie viele sie gebraucht hat
+    //counts all calls since startup, so e.g. the routine can log how many it needed
     private call_count: number = 0;
     constructor(
         private readonly httpService: HttpService,
@@ -38,21 +38,21 @@ export class SpotifyApiService {
     ) {}
 
     /**
-     * Anzahl aller API-Calls seit dem Start der App
+     * Number of all API calls since the app started
      */
     getCallCount(): number {
         return this.call_count;
     }
 
     /**
-     * GET auf einen Spotify-Endpoint, z.B. "me/playlists", gibt die Antwort zurück
+     * GET on a Spotify endpoint, e.g. "me/playlists", returns the response
      */
     async sendGetCall(endpoint: string, params: Record<string, any> = {}): Promise<any> {
         return this.request('GET', endpoint, { params });
     }
 
     /**
-     * POST auf einen Spotify-Endpoint, data ist der JSON-Body
+     * POST on a Spotify endpoint, data is the JSON body
      */
     async sendPostCall(
         endpoint: string,
@@ -63,14 +63,14 @@ export class SpotifyApiService {
     }
 
     /**
-     * PUT auf einen Spotify-Endpoint, data ist der JSON-Body
+     * PUT on a Spotify endpoint, data is the JSON body
      */
     async sendPutCall(endpoint: string, data: any, params: Record<string, any> = {}): Promise<any> {
         return this.request('PUT', endpoint, { data, params });
     }
 
     /**
-     * DELETE auf einen Spotify-Endpoint, data ist der JSON-Body
+     * DELETE on a Spotify endpoint, data is the JSON body
      */
     async sendDeleteCall(
         endpoint: string,
@@ -81,15 +81,15 @@ export class SpotifyApiService {
     }
 
     /**
-     * Lädt alle Seiten einer Liste (alles mit items + next, z.B. Playlist-Items oder eigene Playlists)
-     * WICHTIG: wenn man fields angibt, muss next mit drin sein, sonst wird nur die erste Seite geladen
+     * Loads all pages of a list (anything with items + next, e.g. playlist items or own playlists)
+     * IMPORTANT: if fields is set, it has to include next, otherwise only the first page is loaded
      */
     async getAllPages(endpoint: string, params: Record<string, any> = {}): Promise<any[]> {
         let items: any[] = [];
         let next_url: string | null = endpoint;
         let is_first_page = true;
         do {
-            //next ist eine komplette URL, in der die params schon drin stecken
+            //next is a complete URL that already contains the params
             const data: any = await this.sendGetCall(next_url, is_first_page ? params : {});
             items = items.concat(data.items);
             next_url = data.next ?? null;
@@ -99,9 +99,9 @@ export class SpotifyApiService {
     }
 
     /**
-     * Zentrale Methode für alle Calls, mit Retry bei:
-     * 401 (Token abgelaufen, wird erneuert), 429 (Rate Limit, wartet so lange wie Spotify sagt),
-     * 5xx (Spotify hat Probleme) und Netzwerkfehlern (Internet kurz weg)
+     * Central method for all calls, with retry on:
+     * 401 (token expired, gets renewed), 429 (rate limit, waits as long as Spotify says),
+     * 5xx (Spotify has problems) and network errors (internet briefly gone)
      */
     private async request(method: Method, endpoint: string, options: RequestOptions): Promise<any> {
         const url = endpoint.startsWith('http') ? endpoint : SpotifyApiService.BASE_URL + endpoint;
@@ -127,12 +127,12 @@ export class SpotifyApiService {
                 await new Promise((resolve) => setTimeout(resolve, wait_time));
             }
         }
-        //wird nie erreicht, weil der letzte Versuch oben immer returned oder wirft
+        //never reached, because the last attempt above always returns or throws
         throw new SpotifyApiError(`${method} ${endpoint} failed`, undefined);
     }
 
     /**
-     * Gibt zurück, wie lange vor dem nächsten Versuch gewartet wird, oder null, wenn ein Retry sinnlos ist
+     * Returns how long to wait before the next attempt, or null if a retry makes no sense
      */
     private getRetryWaitTime(error: unknown, attempt: number, endpoint: string): number | null {
         if (!isAxiosError(error)) {
@@ -176,7 +176,7 @@ export class SpotifyApiService {
     }
 
     /**
-     * Macht aus einem Axios-Fehler einen kurzen SpotifyApiError mit Methode, Endpoint, Status und Spotify-Meldung
+     * Turns an Axios error into a short SpotifyApiError with method, endpoint, status and Spotify's message
      */
     private toSpotifyApiError(error: unknown, method: Method, endpoint: string): SpotifyApiError {
         if (isAxiosError(error)) {

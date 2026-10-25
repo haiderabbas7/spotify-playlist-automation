@@ -12,16 +12,16 @@ export class UserService {
     ) {}
 
     /**
-     * Haiders Spotify User-ID aus der .env
+     * Spotify user ID of the logged in user
      */
     getUserID() {
         return this.configService.get<string>('MY_USER_ID');
     }
 
     /**
-     * Gibt die ID der Playlist zurück, die gerade läuft, sonst null
-     * null auch dann, wenn nichts läuft (Spotify antwortet dann mit 204 ohne Inhalt)
-     * oder wenn der Song keinen Kontext hat, z.B. beim Radio oder einem einzelnen Song aus der Suche
+     * Returns the ID of the playlist that is currently playing, otherwise null
+     * also null if nothing is playing (Spotify then answers with 204 and no content)
+     * or if the song has no context, e.g. radio or a single song from the search
      */
     async getCurrentlyPlayingPlaylist(): Promise<string | null> {
         const data: any = await this.spotifyApiService.sendGetCall('me/player/currently-playing');

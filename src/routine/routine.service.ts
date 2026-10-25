@@ -7,9 +7,9 @@ import { SpotifyApiService } from '../spotify-api/spotify-api.service';
 import { CollectItem, parseTargetTags, planRoutine, QueueState, SongPlan } from './routine-planner';
 
 type RoutineCache = {
-    //UTC, wann die Routine zuletzt gelaufen ist
+    //UTC, when the routine last ran
     last_run_at: string | null;
-    //Inhalt jeder Queue beim letzten Lauf, darüber wird erkannt, ob ein Song aus einer Queue entfernt wurde
+    //content of every queue at the last run, used to detect songs the user removed from a queue
     queues: Record<string, { uris: string[] }>;
 };
 
@@ -20,15 +20,15 @@ type QueueMeta = {
 };
 
 /**
- * Die Queue-Routine: verschiebt Songs aus der Sammel-Playlist (BEHALTEN) in Liked Songs und in die Main ihrer Queue
- * die Entscheidungen trifft routine-planner.ts, hier passieren nur das Laden, das Ausführen und das Logging
+ * The queue routine: moves songs from the collect playlist into Liked Songs and into the main playlist of their queue
+ * the decisions are made in routine-planner.ts, this only does the loading, executing and logging
  */
 @Injectable()
 export class RoutineService {
     private static readonly CACHE_FILE = 'routine.json';
-    //läuft der PC länger, wird die Routine nach so vielen Stunden nochmal angestoßen
+    //if the PC keeps running, the routine is triggered again after this many hours
     private static readonly RUN_INTERVAL_HOURS = 20;
-    //Limits der Spotify API pro Call
+    //limits of the Spotify API per call
     private static readonly LIBRARY_BATCH_SIZE = 40;
     private static readonly PLAYLIST_BATCH_SIZE = 100;
 
@@ -62,7 +62,7 @@ export class RoutineService {
         const calls_before = this.spotifyApiService.getCallCount();
         const cache = await this.readCache();
 
-        //1. alle eigenen Playlists holen, darin die Queues über ihren Tag finden
+        //1. get all own playlists and find the queues by their tag
         const own_playlists = await this.playlistService.getOwnPlaylists();
         const own_by_id = new Map<string, any>(
             own_playlists.map((playlist) => [playlist.id, playlist]),
@@ -81,8 +81,8 @@ export class RoutineService {
             queue_metas.map((queue) => queue.target_id).filter((id) => own_by_id.has(id)),
         );
 
-        //2. Queue-Inhalte laden, immer komplett neu
-        //die snapshot_id taugt nicht als Änderungs-Check, Spotify liefert nach Änderungen teils minutenlang die alte
+        //2. load the queue contents, always completely
+        //snapshot_id is no reliable change check, after changes Spotify sometimes returns the old one for minutes
         const queues: QueueState[] = [];
         for (const meta of queue_metas) {
             const cached = cache.queues[meta.id];
@@ -96,7 +96,7 @@ export class RoutineService {
             });
         }
 
-        //3. Sammel-Playlist lesen
+        //3. read the collect playlist
         const collect_items = await this.getCollectItems(collect_id, log);
         if (collect_items.length === 0) {
             log(`${own_by_id.get(collect_id).name} is empty (${queues.length} queues checked)`);
@@ -105,7 +105,7 @@ export class RoutineService {
         }
         log(`${collect_items.length} songs in ${own_by_id.get(collect_id).name}`);
 
-        //4. Inhalte der Playlists laden, die für die Entscheidung gebraucht werden (Duplikate, "schon in einer Main")
+        //4. load the playlists needed for the decision (duplicates, "already in a main")
         const playlist_contents = new Map<string, Set<string>>();
         for (const playlist_id of this.getNeededPlaylists(
             collect_items,
@@ -116,7 +116,7 @@ export class RoutineService {
             playlist_contents.set(playlist_id, new Set(await this.getPlaylistURIs(playlist_id)));
         }
 
-        //5. entscheiden
+        //5. decide
         const plans = planRoutine({
             collect_items,
             queues,
@@ -129,13 +129,13 @@ export class RoutineService {
             log(this.describePlan(plan, name_of), plan.warning !== null);
         }
 
-        //6. ausführen
+        //6. execute
         const failed_uris = new Set<string>();
         if (!is_dry_run) {
             await this.execute(plans, collect_id, failed_uris, log);
         }
 
-        //7. Cache aktualisieren
+        //7. update the cache
         const removed_by_queue = new Map<string, Set<string>>();
         for (const plan of plans) {
             if (is_dry_run || failed_uris.has(plan.uri)) {
@@ -159,9 +159,9 @@ export class RoutineService {
     }
 
     /**
-     * Schritte in sicherer Reihenfolge: Liken, ins Target, aus Queues löschen, aus BEHALTEN löschen
-     * schlägt ein Schritt für einen Song fehl, werden seine weiteren Schritte übersprungen
-     * er bleibt dann in BEHALTEN und wird beim nächsten Lauf nochmal versucht
+     * Steps in a safe order: like, add to the target, remove from queues, remove from the collect playlist
+     * if a step fails for a song, its remaining steps are skipped
+     * it then stays in the collect playlist and is retried on the next run
      */
     private async execute(
         plans: SongPlan[],
@@ -171,7 +171,7 @@ export class RoutineService {
     ) {
         const active = () => plans.filter((plan) => !failed_uris.has(plan.uri));
 
-        //a) liken, aber nur was noch nicht geliked ist, sonst rutscht der Song in Liked Songs nach oben
+        //a) like, but only songs that are not liked yet, otherwise the song moves to the top of Liked Songs
         const like_uris = active()
             .filter((plan) => plan.like)
             .map((plan) => plan.uri);
@@ -195,7 +195,7 @@ export class RoutineService {
             }
         }
 
-        //b) ans Ende des Targets anhängen
+        //b) append to the end of the target
         for (const [target_id, uris] of this.groupBy(
             active().filter((plan) => plan.target_id !== null && plan.add_to_target),
             (plan) => [plan.target_id!],
@@ -212,7 +212,7 @@ export class RoutineService {
             }
         }
 
-        //c) aus den Queues löschen
+        //c) remove from the queues
         for (const [queue_id, uris] of this.groupBy(
             active(),
             (plan) => plan.remove_from_queue_ids,
@@ -227,7 +227,7 @@ export class RoutineService {
             }
         }
 
-        //d) aus BEHALTEN löschen
+        //d) remove from the collect playlist
         const collect_uris = active()
             .filter((plan) => plan.remove_from_collect)
             .map((plan) => plan.uri);
@@ -242,7 +242,7 @@ export class RoutineService {
     }
 
     /**
-     * Löscht alle Vorkommen der Songs aus einer Playlist
+     * Removes all occurrences of the songs from a playlist
      */
     private async removeFromPlaylist(playlist_id: string, uris: string[]): Promise<any> {
         return this.spotifyApiService.sendDeleteCall(`playlists/${playlist_id}/items`, {
@@ -306,8 +306,8 @@ export class RoutineService {
     }
 
     /**
-     * Fallback und die Mains aller Queues, in denen ein Song aus BEHALTEN liegt oder lag
-     * liegt ein Song in gar keiner Queue, werden alle Mains geladen (für "schon in einer Main")
+     * The fallback and the mains of all queues that contain or contained a song from the collect playlist
+     * if a song is in no queue at all, all mains are loaded (for "already in a main")
      */
     private getNeededPlaylists(
         collect_items: CollectItem[],
@@ -363,8 +363,8 @@ export class RoutineService {
     }
 
     /**
-     * Im Dry-Run werden nur neue Queues in den Cache aufgenommen, bestehende Einträge bleiben stehen
-     * sonst würde beim Umschalten auf scharf die Info "Haken entfernt" verloren gehen
+     * In a dry run only new queues are added to the cache, existing entries stay
+     * otherwise the "removed by the user" info would get lost when switching to live
      */
     private async saveCache(
         cache: RoutineCache,
@@ -397,7 +397,7 @@ export class RoutineService {
     }
 
     /**
-     * Gruppiert die URIs der Pläne nach Playlist, z.B. alle Songs, die in dieselbe Main kommen
+     * Groups the URIs of the plans by playlist, e.g. all songs that go into the same main
      */
     private groupBy(
         plans: SongPlan[],

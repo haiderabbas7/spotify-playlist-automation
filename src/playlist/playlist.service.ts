@@ -7,7 +7,7 @@ import { SpotifyApiService } from '../spotify-api/spotify-api.service';
 @Injectable()
 export class PlaylistService {
     private static readonly TIMESTAMP_PREFIX = ' (Playlist last shuffled on ';
-    //findet den kompletten Zeitstempel inklusive Leerzeichen davor, egal wo er in der Beschreibung steht
+    //matches the whole timestamp including the space before it, wherever it is in the description
     private static readonly TIMESTAMP_REGEX = /\s*\(Playlist last shuffled on [^)]*\)/g;
 
     constructor(
@@ -18,28 +18,28 @@ export class PlaylistService {
     ) {}
 
     /**
-     * true, wenn die Playlist Haider gehört (owner = MY_USER_ID aus der .env)
+     * true if the playlist belongs to the logged in user
      */
     isOwnPlaylist(playlist: any): boolean {
         return playlist.owner.id === this.userService.getUserID();
     }
 
     /**
-     * IDs aller eigenen Playlists, aus denen in den letzten x Stunden ein Song zu Ende gehört wurde (über recently-played)
+     * IDs of all own playlists from which a song was played to the end in the last x hours (via recently-played)
      */
     async getOwnListenedPlaylists(x_hours_back: number = 2): Promise<string[]> {
         const end_date = new Date(Date.now() - x_hours_back * 60 * 60 * 1000);
         const listened_tracks: any[] = await this.trackService.getRecentlyPlayedTracks(end_date);
         const playlist_ids: Set<string> = new Set<string>();
 
-        //DIESER STEP IST WICHTIG! dadurch dass ich immer neu frage, welche playlists ich habe, werden keine gelöschten geshuffled
+        //IMPORTANT: own playlists are requested every time, so deleted playlists are never shuffled
         const own_playlists = await this.getOwnPlaylists();
 
-        // Abgleich mit den Playlists, die der Nutzer gehört hat
+        // compare with the playlists the user listened to
         for (const track of listened_tracks) {
             if (track.context?.type === 'playlist' && track.context.uri) {
                 const playlist_id = this.helperService.extractIDfromSpotifyURI(track.context.uri);
-                //er fügt die playlist_id nur ein, wenn es meine eigene playlist ist
+                //only add the playlist if it is an own playlist
                 if (own_playlists.some((playlist) => playlist.id === playlist_id)) {
                     playlist_ids.add(playlist_id);
                 }
@@ -49,24 +49,24 @@ export class PlaylistService {
     }
 
     /**
-     * Alle Playlists, die Haider gehört (gefolgte Playlists anderer User fliegen raus)
-     * die Einträge enthalten u.a. id, name, description, snapshot_id und items.total
+     * All playlists owned by the logged in user (followed playlists of other users are left out)
+     * the entries contain id, name, description, snapshot_id and items.total among others
      */
     async getOwnPlaylists(): Promise<any[]> {
         const playlists = await this.spotifyApiService.getAllPages('me/playlists', { limit: 50 });
-        //in der Liste können null-Einträge stecken, z.B. bei gelöschten Playlists
+        //the list can contain null entries, e.g. for deleted playlists
         return playlists.filter((playlist) => playlist && this.isOwnPlaylist(playlist));
     }
 
     /**
-     * Nur name, snapshot_id und Anzahl der Songs einer Playlist
+     * Only name, snapshot_id and number of songs of a playlist
      */
     async getPlaylistByIDOnlyNecessaryInfo(playlist_id: string) {
         return await this.getPlaylistByID(playlist_id, 'name,snapshot_id,items.total');
     }
 
     /**
-     * Holt eine Playlist, mit fields kann man die Antwort auf bestimmte Felder begrenzen
+     * Gets a playlist, fields limits the response to certain fields
      */
     async getPlaylistByID(playlist_id: string, fields: string = ''): Promise<any> {
         return await this.spotifyApiService.sendGetCall(`playlists/${playlist_id}`, {
@@ -75,8 +75,8 @@ export class PlaylistService {
     }
 
     /**
-     * Verschiebt range_length Songs ab range_start vor die Position insert_before (Indizes 0-basiert)
-     * gibt die neue snapshot_id zurück, die beim nächsten Reorder mitgeschickt wird
+     * Moves range_length songs starting at range_start before the position insert_before (indices are 0-based)
+     * returns the new snapshot_id, which is sent with the next reorder
      */
     async reorderPlaylistByID(
         playlist_id: string,
@@ -91,16 +91,16 @@ export class PlaylistService {
                 range_start,
                 range_length,
                 insert_before,
-                //wenn snapshot_id gesetzt, dann wird es eingefügt
+                //snapshot_id is only sent if it is set
                 ...(snapshot_id && { snapshot_id }),
             },
         );
-        //returned nicht das Objekt mit einem string attribut, sondern den string selber
+        //returns the string itself, not the object with a string attribute
         return response.snapshot_id;
     }
 
     /**
-     * Liefert die Beschreibung schon dekodiert, also mit " statt &quot;
+     * Returns the description already decoded, so with " instead of &quot;
      */
     async getPlaylistDescription(playlist_id: string): Promise<string> {
         const playlist: any = await this.getPlaylistByID(playlist_id, 'description');
@@ -108,7 +108,7 @@ export class PlaylistService {
     }
 
     /**
-     * Überschreibt die Beschreibung einer Playlist komplett
+     * Overwrites the whole description of a playlist
      */
     async setPlaylistDescription(playlist_id: string, new_description: string) {
         await this.spotifyApiService.sendPutCall(`playlists/${playlist_id}`, {
@@ -117,8 +117,8 @@ export class PlaylistService {
     }
 
     /**
-     * Ersetzt NUR den alten Zeitstempel durch einen neuen, alles andere in der Beschreibung bleibt stehen
-     * (früher wurde alles ab dem Zeitstempel abgeschnitten, auch Text der dahinter stand)
+     * Replaces ONLY the old timestamp with a new one, everything else in the description stays
+     * (previously everything from the timestamp on was cut off, including text after it)
      */
     async addCurrentTimestampToPlaylistDescription(playlist_id: string) {
         const current_time = this.helperService.getCurrentTimestampFormatted();

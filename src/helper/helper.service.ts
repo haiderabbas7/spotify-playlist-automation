@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class HelperService {
-    //open ist ein ES modul und kann daher NUR so importiert werden
+    //open is an ES module and can therefore ONLY be imported like this
     async openInBrowser(url: string) {
         const module = await (eval(`import('open')`) as Promise<{
             default: (target: string) => Promise<unknown>;
@@ -11,18 +11,18 @@ export class HelperService {
     }
 
     /**
-     * Mein "eigener" weighted random object algo (hab ich vom package weighted-random-object geklaut)
-     * man gibt einfach ein array an Elementen ein, wobei jedes Element ein attribut weight enthalten soll
-     * und er gibt dir ein zufälliges objekt zurück OHNE ES ZU ENTFERNEN
+     * Weighted random pick, based on the package weighted-random-object
+     * takes an array of elements, each element needs a weight attribute
+     * and returns a random element WITHOUT REMOVING IT
      */
     getWeightedRandom<T extends { weight: number }>(objects: T[]): T | undefined {
-        // Berechne das Gesamtgewicht
+        // sum of all weights
         const totalWeight = objects.reduce((agg, object) => agg + object.weight, 0);
 
-        // Generiere eine Zufallszahl im Bereich des Gesamtgewichts
+        // random number within the total weight
         const randomNumber = Math.random() * totalWeight;
 
-        // Finde das Objekt, dessen Gewicht die Zufallszahl überschreitet
+        // find the element whose cumulative weight exceeds the random number
         let weightSum = 0;
         return objects.find((object) => {
             weightSum += object.weight;
@@ -31,15 +31,15 @@ export class HelperService {
     }
 
     /**
-     * spotify:playlist:abc => abc, funktioniert für alle Spotify URIs (track, album, ...)
+     * spotify:playlist:abc => abc, works for all Spotify URIs (track, album, ...)
      */
     extractIDfromSpotifyURI(uri: string): string {
         return uri.substring(uri.lastIndexOf(':') + 1);
     }
 
     /**
-     * Spotify liefert Playlist-Beschreibungen HTML-kodiert (&quot; statt "), das wird hier rückgängig gemacht
-     * ohne das würde beim Zurückschreiben einer Beschreibung aus " irgendwann &amp;quot; werden
+     * Spotify returns playlist descriptions HTML encoded (&quot; instead of "), this reverts it
+     * without it, writing a description back would eventually turn " into &amp;quot;
      */
     decodeHTMLEntities(text: string): string {
         const named: Record<string, string> = {
@@ -62,14 +62,14 @@ export class HelperService {
     }
 
     /**
-     * Wartet die angegebene Anzahl Sekunden
+     * Waits the given number of seconds
      */
     async wait(seconds: number) {
         await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
     }
 
     /**
-     * Aktuelle Zeit in deutscher Zeit als "DD.MM. HH:MM", für Logs und den Shuffle-Zeitstempel
+     * Current time in German time (Europe/Berlin) as "DD.MM. HH:MM", for logs and the shuffle timestamp
      */
     getCurrentTimestampFormatted(): string {
         const now = new Date();
@@ -86,7 +86,7 @@ export class HelperService {
     }
 
     /**
-     * hab ich von GPT, printed einfach (DD.MM.YY HH:MM) message
+     * Prints (DD.MM. HH:MM) message
      */
     printWithTimestamp(message: string, is_error: boolean = false) {
         const formattedDate = this.getCurrentTimestampFormatted();
@@ -97,10 +97,10 @@ export class HelperService {
         }
     }
 
-    /** Hab ich von GPT, man übergibt eine Dauer in Millisekunden an, zb durch eine Date differenz
-     * und er returned einen schönen string abhängig von der Länge
-     * Dauer kürzer als eine Minute => SS.MSMS seconds, zb 15.37 seconds
-     * Dauer länger als eine Minute => MM:SS minutes, zb 1:23 minutes
+    /** Takes a duration in milliseconds, e.g. a date difference
+     * and returns a readable string depending on the length
+     * shorter than a minute => SS.MS seconds, e.g. 15.37 seconds
+     * longer than a minute => MM:SS minutes, e.g. 1:23 minutes
      */
     getFormattedStringForDuration(durationMs: number): string {
         const minutes = Math.floor(durationMs / 60000);

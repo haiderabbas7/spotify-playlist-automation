@@ -20,13 +20,13 @@ export class MainService {
         private readonly routineService: RoutineService,
     ) {}
 
-    //alle Läufe (Routine + Shuffle) hängen sich hier hintereinander, damit nie zwei gleichzeitig laufen
+    //all runs (routine + shuffle) are queued here one after another, so two never run at the same time
     private task_chain: Promise<void> = Promise.resolve();
 
     /**
-     * Wird einmal beim Start der App aufgerufen
-     * Mit gespeichertem Login geht es direkt los, sonst wird der Spotify-Login im Browser geöffnet
-     * Ohne Internet wird es jede Minute nochmal versucht, z.B. wenn das Netz beim Hochfahren noch nicht da ist
+     * Called once when the app starts
+     * With a saved login it starts right away, otherwise the Spotify login is opened in the browser
+     * Without internet it is retried every minute, e.g. when the network is not up yet after booting
      */
     async startup() {
         const has_valid_login = await this.checkLoginWithRetry();
@@ -39,7 +39,7 @@ export class MainService {
             this.helperService.printWithTimestamp('Logged in with saved login');
             await this.startShuffleApplication(true);
         } else {
-            //nach dem Login im Browser geht es im Callback /start weiter
+            //after the login in the browser it continues in the callback /start
             this.helperService.printWithTimestamp('Opening Spotify login in browser...');
             const port = this.configService.get<string>('PORT');
             await this.helperService.openInBrowser(`http://127.0.0.1:${port}/`);
@@ -47,7 +47,7 @@ export class MainService {
     }
 
     /**
-     * true/false wie hasValidLogin, null wenn Spotify auch nach allen Versuchen nicht erreichbar war
+     * true/false like hasValidLogin, null if Spotify was not reachable even after all attempts
      */
     private async checkLoginWithRetry(): Promise<boolean | null> {
         const max_attempts = 30;
@@ -66,8 +66,8 @@ export class MainService {
     }
 
     /**
-     * Läuft stündlich, einmal nach dem Start (is_initial) und manuell über /shuffle
-     * erst die Queue-Routine (beim Start immer, sonst nur wenn sie über 20 Stunden nicht lief), dann der Shuffle
+     * Runs every hour, once after startup (is_initial) and manually via /shuffle
+     * first the queue routine (always on startup, otherwise only if it did not run for over 20 hours), then the shuffle
      */
     @Cron(CronExpression.EVERY_HOUR)
     async startShuffleApplication(is_initial: boolean = false) {
@@ -84,14 +84,14 @@ export class MainService {
             try {
                 await this.shuffleListenedPlaylists(is_initial);
             } catch (error) {
-                //damit ein Fehler nicht als riesiger Stacktrace vom Scheduler im Log landet
+                //so an error does not end up in the log as a huge stack trace from the scheduler
                 this.helperService.printWithTimestamp(`Shuffle run failed: ${error}`, true);
             }
         });
     }
 
     /**
-     * Stößt nur die Routine an, sofort und unabhängig davon, wann sie zuletzt lief (Route /routine, zum Testen)
+     * Triggers only the routine, right away and regardless of when it last ran (route /routine, for testing)
      */
     async startRoutineNow() {
         await this.runExclusive(async () => {
@@ -104,7 +104,7 @@ export class MainService {
     }
 
     /**
-     * Startet die Routine, wenn force gesetzt oder sie fällig ist, Fehler werden nur geloggt
+     * Starts the routine if force is set or it is due, errors are only logged
      */
     private async runRoutine(force: boolean) {
         try {
@@ -112,13 +112,13 @@ export class MainService {
                 await this.routineService.run();
             }
         } catch (error) {
-            //ein Fehler in der Routine soll den Shuffle nicht verhindern
+            //an error in the routine must not prevent the shuffle
             this.helperService.printWithTimestamp(`Routine failed: ${error}`, true);
         }
     }
 
     /**
-     * Hängt eine Aufgabe hinten an die Warteschlange, sie startet erst, wenn die vorherige fertig ist
+     * Appends a task to the queue, it only starts when the previous one is done
      */
     private async runExclusive(task: () => Promise<void>) {
         const run = this.task_chain.then(task);
@@ -127,7 +127,7 @@ export class MainService {
     }
 
     /**
-     * Shuffled alle Playlists, die in den letzten 24 (Start) bzw. 2 Stunden gehört wurden, und setzt danach den Zeitstempel
+     * Shuffles all playlists played in the last 24 (startup) or 2 hours and sets the timestamp afterwards
      */
     private async shuffleListenedPlaylists(is_initial: boolean) {
         const look_x_hours_back = is_initial ? 24 : 2;
@@ -145,7 +145,7 @@ export class MainService {
             try {
                 await this.shuffleService.dynamicWeightedShuffle(playlist_id);
             } catch (error) {
-                //wenn irgendwie beim dynamic shuffle ein fehler aufkommt, dann gibt es noch den normalen shuffle als fail-save
+                //if the dynamic shuffle fails for some reason, the plain shuffle is used as a fallback
                 this.helperService.printWithTimestamp(
                     `Error occurred when trying dynamic shuffle, will instead use insertion shuffle: ${error}`,
                     true,
