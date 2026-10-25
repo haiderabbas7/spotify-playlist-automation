@@ -1,85 +1,109 @@
-# Spotify Scheduled Dynamic Playlist Shuffler
+# Spotify Playlist Automation
 
-A NestJS app that runs in the background on a Windows PC and does two things with the Spotify Web API, each of which can be switched on and off on its own:
+A small background app for people who sort their music into playlists by hand.
 
-- **Shuffler:** shuffles the playlists you listened to recently. Tracks get weights, so songs that were at the top last time are less likely to be picked again.
-- **Queue routine:** you put songs you like from a "queue" playlist into one collect playlist. Once a day the routine likes them, adds them to the main playlist of their queue and removes them from the queue.
+## The problem
 
-## Packages & Technologies Used
-- **Nest.js** – A progressive Node.js framework for building scalable server-side applications.
-- **Spotify Web API** – An interface to interact with Spotify data, such as playlists, tracks, and user information.
-- **OAuth2 Authorization Code Flow** – A secure authentication method that allows the app to access user data without exposing credentials.
-- **NPM LowDB Flat File DB** – A lightweight, JSON-based database for storing data locally without requiring a full database server.
-- **PM2 Package Manager 2** - A process manager for Node.js applications that enables automatic startup and background execution using a batch script and cron scheduling.
-- **Jest** – Unit tests for the queue routine's decision rules.
+I collect new music in "queue" playlists: new artists to check out, albums to listen through, deep dives into one artist. When a song in a queue is good, it should go into the main playlist of that genre. On the phone that means three steps per song: like it, find the right main playlist in the folder structure and add it, then remove it from the queue. The Spotify app makes this tedious enough that I barely listened to my queues on the go.
 
-## How the app runs
+On top of that, Spotify's own shuffle kept playing the same songs of my big playlists over and over.
 
-1. **Start:** A Windows scheduled task runs `start_application.bat` on boot, which starts `dist/src/main.js` with PM2. `main.ts` starts the Nest server on `PORT` and calls `MainService.startup()`.
-2. **Login (`AuthService`):** The refresh token is saved in `tokens.json`. On startup the app refreshes it.
-   - Valid login with all scopes → continue without a browser.
-   - No login, rejected token or missing scopes → the browser opens `http://127.0.0.1:<PORT>/`, which redirects to Spotify. The callback `/start` saves the tokens and continues.
-   - Spotify not reachable (e.g. network not up yet) → retry every minute for 30 minutes.
-3. **Run (`MainService.startShuffleApplication`)**, once after login and then every hour (cron). Runs are queued, so the routine and the shuffle never run at the same time:
-   1. **Queue routine**, always on startup, otherwise only if the last run is at least 20 hours ago.
-   2. **Shuffle** of all own playlists played in the last 24 hours (startup) or 2 hours (hourly), except the one that is currently playing.
-4. **Settings:** `settings.json` is read on every run, so changes apply without a restart.
+This app fixes both:
 
-### Shuffle algorithm (`ShuffleService.dynamicWeightedShuffle`)
+- **Queue routine:** you add a song you like to one fixed playlist (one tap in "Save to"). Once a day the app likes it, adds it to the main playlist of the queue it came from and removes it from the queue.
+- **Shuffler:** shuffles the playlists you listened to recently, so songs that were at the top last time are less likely to come up again.
 
-- Played playlists are taken from `GET /me/player/recently-played`. That endpoint only returns the last 50 tracks that were played to the end.
-- Every track of a playlist has a weight in `lowdb.json`. New tracks start at 500.
-- Before each shuffle: tracks that were moved to the top last time are multiplied by 0.5 (minimum 50), all others by 1.1.
-- The first 45 positions are then filled by weighted random picks (roulette), each moved with a reorder call. The picked tracks are stored for the next shuffle.
-- If anything fails, `insertionShuffle` (plain random) is used as a fallback.
-- Afterwards ` (Playlist last shuffled on DD.MM. HH:MM)` is written to the playlist description. Only that part is replaced, the rest of the description stays.
+Both parts can be switched on and off independently.
 
-### Queue routine (`src/routine/`)
+## What it does
 
-- **Queues** are own playlists whose description contains a tag with the ID of their main playlist: `{spotify:playlist:<main-id>}` or `{<main-id>}`. Queues pointing to the same main form a project. Spotify folders are not visible through the API.
-- **Collect playlist** (`collect_playlist_id`, "BEHALTEN") holds the songs to process. **Fallback playlist** (`fallback_playlist_id`, "EINSORTIEREN") is used when the main is unclear.
-- **Decision rules** live in `routine-planner.ts` as a pure function and are covered by `routine-planner.spec.ts`. For each song in the collect playlist:
+### Queue routine
 
-| Situation | Result |
-|---|---|
-| Removed from queue Q since the last run (the user unchecked Q) | Main of Q, other queues keep the song |
-| In exactly one queue | Main of that queue, removed from it |
-| In several queues of the same project | That main, removed from all of them |
-| In queues of different projects | Fallback, removed from all of them |
-| In no queue | Fallback |
-| In no queue, but already in a main | Only liked |
-| Local file | Untouched, stays in the collect playlist (the API cannot move it) |
+You tell the app which playlist is a queue by putting the ID of its main playlist into the queue's description, e.g. `{spotify:playlist:0BfYlDPlZlFpDlJxxGNGWi}`. Queues with the same main belong to the same project.
 
-- **Execution order** (`routine.service.ts`): like (only if not liked yet, re-liking moves a song to the top of Liked Songs) → append to the main (no duplicates) → remove from queues → remove from the collect playlist. If a step fails for a song, its remaining steps are skipped. The song stays in the collect playlist and is retried on the next run.
-- **Memory:** `routine.json` stores the queue contents of the last run, which is how removed songs are detected. All queues are read in full on every run, because `snapshot_id` turned out to be unreliable as a change check.
-- **Dry run:** with `routine_dry_run: true` the routine only logs what it would do.
+When you like a song while listening to a queue, add it to your **collect playlist**. If you also uncheck the queue in the same "Save to" dialog, the app knows exactly which queue it came from. Once a day the app then:
+
+1. adds the song to your Liked Songs (songs that are already liked keep their position),
+2. appends it to the main playlist of its queue (never twice),
+3. removes it from the queue,
+4. removes it from the collect playlist.
+
+If the main playlist is unclear (the song is in queues of different projects, or in no queue at all), it goes into a **fallback playlist** you sort by hand. Nothing is ever removed from your Liked Songs, and a song is never removed from a queue before it is safely in the main playlist.
+
+### Shuffler
+
+Every hour the app looks at what you played. For each of your own playlists you listened to, it reorders the first 45 songs with a weighted random pick. Songs that were at the top last time lose weight, all others slowly gain weight. The playlist you are currently listening to is left alone.
+
+## Is this for you?
+
+You need:
+
+- **Spotify Premium.** Spotify requires it for the account that owns a developer app.
+- **Your own app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).** Spotify limits apps in development mode to a few manually added users, so everybody needs their own app. It takes about five minutes, see below.
+- **A computer that runs regularly.** The routine runs when the app starts and then at most once every 20 hours. Your phone works as usual, the songs wait in the collect playlist until the computer is on.
+- **Node.js** (20 or newer).
 
 ## Setup
 
-1. Create an app in the Spotify Developer Dashboard with the redirect URI `http://127.0.0.1:<PORT>/start`.
-2. Create `.env`:
+1. **Create a Spotify app**
+   - Open the [Developer Dashboard](https://developer.spotify.com/dashboard) and click "Create app".
+   - Redirect URI: `http://127.0.0.1:777/start` (use a different port here and in `.env` if 777 is taken).
+   - API: Web API.
+   - Copy the Client ID and Client Secret from the app's settings.
+2. **Install**
    ```
-   PORT=777
-   CLIENT_ID=...
-   CLIENT_SECRET=...
-   MY_USER_ID=...
+   git clone https://github.com/haiderabbas7/spotify-playlist-automation.git
+   cd spotify-playlist-automation
+   npm install
+   npm run build
    ```
-3. `npm install`, `npm run build`, then start with `start_application.bat` (PM2) or `npm run start:prod`.
-4. Log in once in the browser window that opens. `settings.json` is created with default values on the first run.
+3. **Configure:** copy `.env.example` to `.env` and fill in `CLIENT_ID` and `CLIENT_SECRET`. For the queue routine, also create two playlists in Spotify (a collect playlist and a fallback playlist) and enter their IDs (see [Get a playlist ID](#usage)).
+4. **Start**
+   - Try it in the foreground: `npm run start:prod`
+   - Or in the background with PM2 (`npm install -g pm2`): on Windows run `scripts/start_application.bat`, elsewhere `pm2 start dist/src/main.js --name spotify-playlist-automation`.
+5. **Log in:** on the first start a browser tab opens. Log in to Spotify and accept. The login is saved, later starts do not open the browser anymore.
+6. **Start automatically (optional)**
+   - Windows: create a task in Task Scheduler that runs `scripts/start_application.bat` when you log on.
+   - macOS/Linux: `pm2 startup` and `pm2 save`.
 
-### settings.json
+## Usage
+
+**Get a playlist ID:** in Spotify Desktop, hold **ALT**, right-click the playlist and choose **Share → Copy Spotify URI**. You get something like `spotify:playlist:0BfYlDPlZlFpDlJxxGNGWi`, the part after the last colon is the ID. Without ALT the menu only offers a link. In `.env` and in the tags both the full URI and the plain ID work.
+
+**Mark your queues:** paste `{spotify:playlist:<id of the main playlist>}` anywhere into the description of each queue. The rest of the description is left untouched. Removing the tag turns the queue back into a normal playlist.
+
+**Switches** in `settings.json` (created on the first start, changes apply without a restart):
 
 | Key | Meaning |
 |---|---|
-| `shuffle_enabled` | Shuffler on/off |
-| `routine_enabled` | Queue routine on/off |
-| `routine_dry_run` | Routine only logs what it would do |
-| `collect_playlist_id` | Playlist the routine takes songs from |
-| `fallback_playlist_id` | Playlist for songs without a clear main |
+| `shuffle_enabled` | Shuffler on or off |
+| `routine_enabled` | Queue routine on or off |
+| `routine_dry_run` | `true`: the routine only writes to the log what it would do. Good for trying it out |
 
-### Local files (gitignored)
+**Log:** with PM2 everything is written to `logs/pm2.log`, for example:
 
-`.env`, `tokens.json` (login), `settings.json`, `lowdb.json` (shuffle weights), `routine.json` (routine memory).
+```
+(25.10. 09:22) [Routine] 1 songs in BEHALTEN
+(25.10. 09:22) [Routine] "like wind" – chouchou merged syrups.: DISCOVERY - J-Rock → j rock, removed from queue
+(25.10. 09:22) [Routine] Done: processed 1, failed 0, skipped 0 (107 API calls)
+```
+
+**Run something right now** while the app is running: open `http://127.0.0.1:777/routine` or `http://127.0.0.1:777/shuffle`.
+
+## Limitations
+
+- **Local files** cannot be moved through the Spotify API. They stay in the collect playlist and have to be sorted by hand.
+- **Spotify folders** are invisible to the API. That is why queues are linked to their main playlist with a tag instead of a folder.
+- **The shuffler** only sees songs that were played to the end, and only the last 50 of them.
+- One installation works for one Spotify account.
+
+## How it works
+
+The technical details (startup, login, retry logic, the shuffle algorithm, the routine's decision rules) are in [docs/how-it-works.md](docs/how-it-works.md).
+
+## Built with
+
+NestJS and TypeScript, the Spotify Web API (Authorization Code Flow), lowdb for local storage, PM2 for running in the background, Jest for tests.
 
 ## Development
 
@@ -90,6 +114,10 @@ npm run lint                        # eslint + prettier
 npm run build                       # build to dist/src/main.js
 ```
 
-- Log: `logs/pm2.log` (`reset_logs.bat` empties it).
+- Log: `logs/pm2.log` (`scripts/reset_logs.bat` empties it on Windows).
 - Manual triggers while running: `GET /shuffle`, `GET /routine`.
-- After code changes: `npm run build`, then `pm2 restart spotify_shuffler`.
+- After code changes: `npm run build`, then `pm2 restart spotify-playlist-automation`.
+
+## License
+
+[MIT](LICENSE)
