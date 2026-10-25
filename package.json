@@ -1,8 +1,8 @@
 {
-  "name": "spotify-shuffler",
-  "version": "0.0.1",
-  "description": "",
-  "author": "",
+  "name": "spotify-playlist-automation",
+  "version": "1.0.0",
+  "description": "Shuffles recently played Spotify playlists with weights and moves liked songs from queue playlists into their main playlist",
+  "author": "haiderabbas7",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {

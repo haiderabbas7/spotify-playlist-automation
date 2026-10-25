@@ -61,7 +61,7 @@ export class AppController {
         return `
             <html lang="en">
             <head>
-                <title>My Spotify Shuffler</title>
+                <title>Spotify Playlist Automation</title>
                 <style>
                     body {
                         background-color: #333;
