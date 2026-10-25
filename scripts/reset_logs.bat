@@ -1,5 +1,6 @@
 @echo off
-type nul > "C:\Users\Haider\PhpstormProjects\spotify-shuffler\logs\pm2.log"
+rem Empties the log file of the app
+type nul > "%~dp0..\logs\pm2.log"
 if %errorlevel% equ 0 (
     echo File content cleared successfully.
 ) else (
