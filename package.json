@@ -4,7 +4,7 @@
   "description": "Shuffles recently played Spotify playlists with weights and moves liked songs from queue playlists into their main playlist",
   "author": "haiderabbas7",
   "private": true,
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\"",
