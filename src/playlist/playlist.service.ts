@@ -18,13 +18,6 @@ export class PlaylistService {
     ) {}
 
     /**
-     * true if the playlist belongs to the logged in user
-     */
-    isOwnPlaylist(playlist: any): boolean {
-        return playlist.owner.id === this.userService.getUserID();
-    }
-
-    /**
      * IDs of all own playlists from which a song was played to the end in the last x hours (via recently-played)
      */
     async getOwnListenedPlaylists(x_hours_back: number = 2): Promise<string[]> {
@@ -53,9 +46,10 @@ export class PlaylistService {
      * the entries contain id, name, description, snapshot_id and items.total among others
      */
     async getOwnPlaylists(): Promise<any[]> {
+        const user_id = await this.userService.getUserID();
         const playlists = await this.spotifyApiService.getAllPages('me/playlists', { limit: 50 });
         //the list can contain null entries, e.g. for deleted playlists
-        return playlists.filter((playlist) => playlist && this.isOwnPlaylist(playlist));
+        return playlists.filter((playlist) => playlist && playlist.owner.id === user_id);
     }
 
     /**

@@ -9,18 +9,12 @@ export type Settings = {
     routine_enabled: boolean;
     //true: the routine changes nothing and only logs what it would do
     routine_dry_run: boolean;
-    //collect playlist the routine takes the songs from
-    collect_playlist_id: string;
-    //playlist for songs without a clear main playlist
-    fallback_playlist_id: string;
 };
 
 const DEFAULT_SETTINGS: Settings = {
     shuffle_enabled: true,
     routine_enabled: true,
     routine_dry_run: true,
-    collect_playlist_id: '3eFrSUEGWIFA3lu2ijpPCO',
-    fallback_playlist_id: '2WN4El6aAabsDquhsYj1w5',
 };
 
 /**

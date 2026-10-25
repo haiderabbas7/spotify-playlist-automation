@@ -1,21 +1,26 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { HelperService } from '../helper/helper.service';
 import { SpotifyApiService } from '../spotify-api/spotify-api.service';
 
 @Injectable()
 export class UserService {
+    //requested once from Spotify and then kept
+    private user_id: string | null = null;
+
     constructor(
-        private readonly configService: ConfigService,
         private readonly helperService: HelperService,
         private readonly spotifyApiService: SpotifyApiService,
     ) {}
 
     /**
-     * Spotify user ID of the logged in user
+     * Spotify user ID of the logged in user, requested once via GET /me
      */
-    getUserID() {
-        return this.configService.get<string>('MY_USER_ID');
+    async getUserID(): Promise<string> {
+        if (this.user_id === null) {
+            const me: any = await this.spotifyApiService.sendGetCall('me');
+            this.user_id = me.id as string;
+        }
+        return this.user_id;
     }
 
     /**

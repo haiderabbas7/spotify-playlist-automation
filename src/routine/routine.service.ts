@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { promises as fs } from 'fs';
 import { HelperService } from '../helper/helper.service';
 import { PlaylistService } from '../playlist/playlist.service';
@@ -33,6 +34,7 @@ export class RoutineService {
     private static readonly PLAYLIST_BATCH_SIZE = 100;
 
     constructor(
+        private readonly configService: ConfigService,
         private readonly helperService: HelperService,
         private readonly playlistService: PlaylistService,
         private readonly settingsService: SettingsService,
@@ -67,11 +69,17 @@ export class RoutineService {
         const own_by_id = new Map<string, any>(
             own_playlists.map((playlist) => [playlist.id, playlist]),
         );
-        const collect_id = settings.collect_playlist_id;
-        const fallback_id = settings.fallback_playlist_id;
+        //IDs come from the .env, a spotify:playlist:... URI works as well
+        const collect_id = this.helperService.extractIDfromSpotifyURI(
+            this.configService.get<string>('COLLECT_PLAYLIST_ID') ?? '',
+        );
+        const fallback_id = this.helperService.extractIDfromSpotifyURI(
+            this.configService.get<string>('FALLBACK_PLAYLIST_ID') ?? '',
+        );
         if (!own_by_id.has(collect_id) || !own_by_id.has(fallback_id)) {
             log(
-                `Collect playlist (${collect_id}) or fallback playlist (${fallback_id}) not found, check settings.json`,
+                `Collect playlist "${collect_id}" or fallback playlist "${fallback_id}" not found among your own playlists, ` +
+                    'set COLLECT_PLAYLIST_ID and FALLBACK_PLAYLIST_ID in .env',
                 true,
             );
             return;

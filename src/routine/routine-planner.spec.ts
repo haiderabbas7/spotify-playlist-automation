@@ -35,7 +35,7 @@ function song(uri: string, is_local: boolean = false) {
 }
 
 describe('planRoutine', () => {
-    it('Song in genau einer Queue: in deren Main, aus der Queue löschen', () => {
+    it('song in exactly one queue: into its main, removed from the queue', () => {
         const [plan] = planRoutine(
             input({ collect_items: [song('s1')], queues: [queue('a1', MAIN_A, ['s1', 's2'])] }),
         );
@@ -47,7 +47,7 @@ describe('planRoutine', () => {
         expect(plan.remove_from_collect).toBe(true);
     });
 
-    it('Haken bei der Queue entfernt: Herkunft ist diese Queue, andere Queues bleiben', () => {
+    it('user removed it from a queue: that queue is the origin, other queues keep it', () => {
         const [plan] = planRoutine(
             input({
                 collect_items: [song('s4')],
@@ -60,7 +60,7 @@ describe('planRoutine', () => {
         expect(plan.origin_queue_ids).toEqual(['a2']);
     });
 
-    it('mehrere Queues im selben Projekt: in die Main, aus allen löschen', () => {
+    it('several queues of the same project: into the main, removed from all of them', () => {
         const [plan] = planRoutine(
             input({
                 collect_items: [song('s3')],
@@ -72,7 +72,7 @@ describe('planRoutine', () => {
         expect(plan.remove_from_queue_ids).toEqual(['a1', 'a2']);
     });
 
-    it('Queues verschiedener Projekte: EINSORTIEREN, aus allen löschen', () => {
+    it('queues of different projects: fallback, removed from all of them', () => {
         const [plan] = planRoutine(
             input({
                 collect_items: [song('s2')],
@@ -84,7 +84,7 @@ describe('planRoutine', () => {
         expect(plan.remove_from_queue_ids).toEqual(['a1', 'b']);
     });
 
-    it('in keiner Queue: EINSORTIEREN', () => {
+    it('in no queue: fallback', () => {
         const [plan] = planRoutine(
             input({ collect_items: [song('s7')], queues: [queue('a1', MAIN_A, ['s1'])] }),
         );
@@ -93,7 +93,7 @@ describe('planRoutine', () => {
         expect(plan.remove_from_queue_ids).toEqual([]);
     });
 
-    it('in keiner Queue, aber schon in einer Main: nur liken', () => {
+    it('in no queue but already in a main: only like', () => {
         const [plan] = planRoutine(
             input({
                 collect_items: [song('s6')],
@@ -108,7 +108,7 @@ describe('planRoutine', () => {
         expect(plan.remove_from_collect).toBe(true);
     });
 
-    it('schon im Target: nicht nochmal einfügen, trotzdem aus der Queue löschen', () => {
+    it('already in the target: not added again, still removed from the queue', () => {
         const [plan] = planRoutine(
             input({
                 collect_items: [song('s3')],
@@ -120,7 +120,7 @@ describe('planRoutine', () => {
         expect(plan.remove_from_queue_ids).toEqual(['a1']);
     });
 
-    it('Main der Queue existiert nicht: EINSORTIEREN mit Warnung, trotzdem aus der Queue löschen', () => {
+    it('main of the queue does not exist: fallback with warning, still removed from the queue', () => {
         const [plan] = planRoutine(
             input({
                 collect_items: [song('s1')],
@@ -132,7 +132,7 @@ describe('planRoutine', () => {
         expect(plan.remove_from_queue_ids).toEqual(['a1']);
     });
 
-    it('Local File: bleibt in BEHALTEN, nichts passiert', () => {
+    it('local file: stays in the collect playlist, nothing happens', () => {
         const [plan] = planRoutine(
             input({ collect_items: [song('spotify:local:a:b:c:100', true)] }),
         );
@@ -142,7 +142,7 @@ describe('planRoutine', () => {
         expect(plan.target_id).toBeNull();
     });
 
-    it('Song doppelt in BEHALTEN: nur einmal verarbeiten', () => {
+    it('song twice in the collect playlist: processed once', () => {
         const plans = planRoutine(
             input({
                 collect_items: [song('s1'), song('s1')],
@@ -152,7 +152,7 @@ describe('planRoutine', () => {
         expect(plans).toHaveLength(1);
     });
 
-    it('neue Queue ohne Cache: kein falsches "Haken entfernt"', () => {
+    it('new queue without cache: no false "removed by the user"', () => {
         const [plan] = planRoutine(
             input({ collect_items: [song('s1')], queues: [queue('a1', MAIN_A, ['s1'], null)] }),
         );
@@ -163,23 +163,23 @@ describe('planRoutine', () => {
 describe('parseTargetTags', () => {
     const ID = '0BfYlDPlZlFpDlJxxGNGWi';
 
-    it('erkennt den Tag mit spotify:playlist:', () => {
+    it('detects the tag with spotify:playlist:', () => {
         expect(
             parseTargetTags(
-                `meine Notiz {spotify:playlist:${ID}} (Playlist last shuffled on 22.10. 16:00)`,
+                `my note {spotify:playlist:${ID}} (Playlist last shuffled on 22.10. 16:00)`,
             ),
         ).toEqual([ID]);
     });
 
-    it('erkennt den Tag nur mit ID', () => {
+    it('detects the tag with only the ID', () => {
         expect(parseTargetTags(`{${ID}}`)).toEqual([ID]);
     });
 
-    it('kein Tag: keine Queue', () => {
-        expect(parseTargetTags('nur eine Beschreibung {kein tag}')).toEqual([]);
+    it('no tag: no queue', () => {
+        expect(parseTargetTags('just a description {no tag}')).toEqual([]);
     });
 
-    it('zwei verschiedene Tags: multiple', () => {
+    it('two different tags: both are returned', () => {
         expect(parseTargetTags(`{${ID}} {41yP6x49QBGMdkNN7ATj5Y}`)).toHaveLength(2);
     });
 });

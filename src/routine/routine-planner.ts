@@ -86,7 +86,7 @@ export function planRoutine(input: PlannerInput): SongPlan[] {
                 remove_from_queue_ids: [],
                 like: false,
                 remove_from_collect: false,
-                warning: 'Local File, bitte von Hand verschieben',
+                warning: 'local file, please move it by hand',
             });
             continue;
         }
@@ -142,7 +142,7 @@ function planSong(item: CollectItem, input: PlannerInput, target_ids: Set<string
             target_id = input.fallback_id;
         } else if (!input.valid_target_ids.has(origin_targets[0])) {
             target_id = input.fallback_id;
-            warning = `Main ${origin_targets[0]} nicht gefunden oder gehört dir nicht, Tag in der Queue prüfen`;
+            warning = `main playlist ${origin_targets[0]} not found or not owned by you, check the tag of the queue`;
         } else {
             target_id = origin_targets[0];
         }
