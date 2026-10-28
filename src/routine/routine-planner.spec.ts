@@ -1,4 +1,11 @@
-import { parseTargetTags, planRoutine, PlannerInput, QueueState } from './routine-planner';
+import {
+    planRoutine,
+    PlannerInput,
+    QueueState,
+    removeErrorMarker,
+    resolveQueueTag,
+    withErrorMarker,
+} from './routine-planner';
 
 const MAIN_A = 'mainAaaaaaaaaaaaaaaaaa';
 const MAIN_B = 'mainBbbbbbbbbbbbbbbbbbb';
@@ -6,7 +13,7 @@ const FALLBACK = 'fallbackkkkkkkkkkkkkkk';
 
 function queue(
     id: string,
-    target_id: string,
+    target_id: string | null,
     uris: string[],
     previous_uris: string[] | null = uris,
 ): QueueState {
@@ -14,6 +21,7 @@ function queue(
         id,
         name: id,
         target_id,
+        target_error: target_id === null ? 'no playlist named "Rokc"' : null,
         uris: new Set(uris),
         previous_uris: previous_uris === null ? null : new Set(previous_uris),
     };
@@ -23,7 +31,6 @@ function input(overrides: Partial<PlannerInput>): PlannerInput {
     return {
         collect_items: [],
         queues: [],
-        valid_target_ids: new Set([MAIN_A, MAIN_B]),
         playlist_contents: new Map(),
         fallback_id: FALLBACK,
         ...overrides,
@@ -120,16 +127,24 @@ describe('planRoutine', () => {
         expect(plan.remove_from_queue_ids).toEqual(['a1']);
     });
 
-    it('main of the queue does not exist: fallback with warning, still removed from the queue', () => {
+    it('broken tag: the song is left alone (stays in the collect playlist and the queue)', () => {
         const [plan] = planRoutine(
-            input({
-                collect_items: [song('s1')],
-                queues: [queue('a1', 'geloeschtxxxxxxxxxxxxx', ['s1'])],
-            }),
+            input({ collect_items: [song('s1')], queues: [queue('a1', null, ['s1'])] }),
         );
-        expect(plan.target_id).toBe(FALLBACK);
-        expect(plan.warning).not.toBeNull();
-        expect(plan.remove_from_queue_ids).toEqual(['a1']);
+        expect(plan.origin).toBe('queue_error');
+        expect(plan.like).toBe(false);
+        expect(plan.target_id).toBeNull();
+        expect(plan.remove_from_queue_ids).toEqual([]);
+        expect(plan.remove_from_collect).toBe(false);
+        expect(plan.warning).toContain('Rokc');
+    });
+
+    it('broken tag and removed by the user: still left alone, not sent to the fallback', () => {
+        const [plan] = planRoutine(
+            input({ collect_items: [song('s1')], queues: [queue('a1', null, [], ['s1'])] }),
+        );
+        expect(plan.origin).toBe('queue_error');
+        expect(plan.remove_from_collect).toBe(false);
     });
 
     it('local file: stays in the collect playlist, nothing happens', () => {
@@ -160,26 +175,61 @@ describe('planRoutine', () => {
     });
 });
 
-describe('parseTargetTags', () => {
-    const ID = '0BfYlDPlZlFpDlJxxGNGWi';
-
-    it('detects the tag with spotify:playlist:', () => {
-        expect(
-            parseTargetTags(
-                `my note {spotify:playlist:${ID}} (Playlist last shuffled on 22.10. 16:00)`,
-            ),
-        ).toEqual([ID]);
-    });
-
-    it('detects the tag with only the ID', () => {
-        expect(parseTargetTags(`{${ID}}`)).toEqual([ID]);
-    });
+describe('resolveQueueTag', () => {
+    const ROCK = '0BfYlDPlZlFpDlJxxGNGWi';
+    const playlists = [
+        { id: ROCK, name: 'Rock' },
+        { id: 'jazzjazzjazzjazzjazzjj', name: 'jazz  fusion' },
+        { id: 'dup1dup1dup1dup1dup1du', name: 'Twice' },
+        { id: 'dup2dup2dup2dup2dup2du', name: 'Twice' },
+        { id: 'queuequeuequeuequeueqq', name: 'DISCOVERY - Rock' },
+    ];
+    const resolve = (description: string) =>
+        resolveQueueTag(description, 'queuequeuequeuequeueqq', playlists);
 
     it('no tag: no queue', () => {
-        expect(parseTargetTags('just a description {no tag}')).toEqual([]);
+        expect(resolve('just a note {with braces} and [brackets]')).toBeNull();
     });
 
-    it('two different tags: both are returned', () => {
-        expect(parseTargetTags(`{${ID}} {41yP6x49QBGMdkNN7ATj5Y}`)).toHaveLength(2);
+    it('by exact name, spaces around are ignored', () => {
+        expect(resolve('my note [T= Rock ] (Playlist last shuffled on 22.10. 16:00)')).toEqual({
+            target_id: ROCK,
+        });
+    });
+
+    it('by ID and by URI', () => {
+        expect(resolve(`[T=${ROCK}]`)).toEqual({ target_id: ROCK });
+        expect(resolve(`[T=spotify:playlist:${ROCK}]`)).toEqual({ target_id: ROCK });
+    });
+
+    it('the name has to match exactly, also case and inner spaces', () => {
+        expect(resolve('[T=rock]')).toEqual({ error: 'no playlist named "rock"' });
+        expect(resolve('[T=jazz fusion]')).toHaveProperty('error');
+        expect(resolve('[T=jazz  fusion]')).toEqual({ target_id: 'jazzjazzjazzjazzjazzjj' });
+    });
+
+    it('errors: duplicate name, unknown ID, two tags, empty tag, points to itself', () => {
+        expect(resolve('[T=Twice]')).toHaveProperty('error');
+        expect(resolve('[T=spotify:playlist:unknownunknownunknownu]')).toHaveProperty('error');
+        expect(resolve(`[T=Rock] [T=${'jazzjazzjazzjazzjazzjj'}]`)).toHaveProperty('error');
+        expect(resolve('[T=]')).toHaveProperty('error');
+        expect(resolve('[T=DISCOVERY - Rock]')).toHaveProperty('error');
+    });
+
+    it('ignores an old error marker when reading the tag', () => {
+        expect(resolve('[T=Rock] [⚠ ERROR: no playlist named "Rokc"]')).toEqual({
+            target_id: ROCK,
+        });
+    });
+});
+
+describe('error marker', () => {
+    it('is put directly behind the tag and removed again', () => {
+        const with_marker = withErrorMarker('note [T=Rokc] (Playlist last shuffled on 1)', 'oops');
+        expect(with_marker).toBe('note [T=Rokc] [⚠ ERROR: oops] (Playlist last shuffled on 1)');
+        expect(removeErrorMarker(with_marker)).toBe('note [T=Rokc] (Playlist last shuffled on 1)');
+        expect(withErrorMarker(with_marker, null)).toBe(
+            'note [T=Rokc] (Playlist last shuffled on 1)',
+        );
     });
 });

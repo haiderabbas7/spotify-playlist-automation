@@ -5,7 +5,15 @@ import { HelperService } from '../helper/helper.service';
 import { PlaylistService } from '../playlist/playlist.service';
 import { SettingsService } from '../settings/settings.service';
 import { SpotifyApiService } from '../spotify-api/spotify-api.service';
-import { CollectItem, parseTargetTags, planRoutine, QueueState, SongPlan } from './routine-planner';
+import {
+    CollectItem,
+    planRoutine,
+    QueueState,
+    removeErrorMarker,
+    resolveQueueTag,
+    SongPlan,
+    withErrorMarker,
+} from './routine-planner';
 
 type RoutineCache = {
     //UTC, when the routine last ran
@@ -17,7 +25,9 @@ type RoutineCache = {
 type QueueMeta = {
     id: string;
     name: string;
-    target_id: string;
+    //null if the tag could not be resolved, see target_error
+    target_id: string | null;
+    target_error: string | null;
 };
 
 /**
@@ -84,9 +94,15 @@ export class RoutineService {
             );
             return;
         }
-        const queue_metas = this.detectQueues(own_playlists, [collect_id, fallback_id], log);
-        const valid_target_ids = new Set(
-            queue_metas.map((queue) => queue.target_id).filter((id) => own_by_id.has(id)),
+        const queue_metas = this.detectQueues(own_playlists, [collect_id, fallback_id]);
+        for (const meta of queue_metas.filter((queue) => queue.target_error !== null)) {
+            log(`Queue "${meta.name}" has a broken tag: ${meta.target_error}`, true);
+        }
+        if (!is_dry_run) {
+            await this.updateErrorMarkers(own_playlists, queue_metas, log);
+        }
+        const target_ids = new Set(
+            queue_metas.map((queue) => queue.target_id).filter((id): id is string => id !== null),
         );
 
         //2. load the queue contents, always completely
@@ -99,6 +115,7 @@ export class RoutineService {
                 id: meta.id,
                 name: meta.name,
                 target_id: meta.target_id,
+                target_error: meta.target_error,
                 uris: new Set(uris),
                 previous_uris: cached ? new Set(cached.uris) : null,
             });
@@ -118,7 +135,7 @@ export class RoutineService {
         for (const playlist_id of this.getNeededPlaylists(
             collect_items,
             queues,
-            valid_target_ids,
+            target_ids,
             fallback_id,
         )) {
             playlist_contents.set(playlist_id, new Set(await this.getPlaylistURIs(playlist_id)));
@@ -128,7 +145,6 @@ export class RoutineService {
         const plans = planRoutine({
             collect_items,
             queues,
-            valid_target_ids,
             playlist_contents,
             fallback_id,
         });
@@ -258,29 +274,58 @@ export class RoutineService {
         });
     }
 
-    private detectQueues(
-        own_playlists: any[],
-        excluded_ids: string[],
-        log: (message: string, is_error?: boolean) => void,
-    ): QueueMeta[] {
+    /**
+     * Finds the queues by their [T=...] tag and resolves the main playlist each one points to
+     */
+    private detectQueues(own_playlists: any[], excluded_ids: string[]): QueueMeta[] {
+        const refs = own_playlists.map((playlist) => ({ id: playlist.id, name: playlist.name }));
         const queues: QueueMeta[] = [];
         for (const playlist of own_playlists) {
             if (excluded_ids.includes(playlist.id)) {
                 continue;
             }
             const description = this.helperService.decodeHTMLEntities(playlist.description ?? '');
-            const target_ids = parseTargetTags(description);
-            if (target_ids.length > 1) {
-                log(`Queue "${playlist.name}" has more than one tag, skipping it`, true);
-            } else if (target_ids.length === 1 && target_ids[0] !== playlist.id) {
-                queues.push({
-                    id: playlist.id,
-                    name: playlist.name,
-                    target_id: target_ids[0],
-                });
+            const result = resolveQueueTag(description, playlist.id, refs);
+            if (result === null) {
+                continue;
             }
+            queues.push({
+                id: playlist.id,
+                name: playlist.name,
+                target_id: 'target_id' in result ? result.target_id : null,
+                target_error: 'error' in result ? result.error : null,
+            });
         }
         return queues;
+    }
+
+    /**
+     * Writes an error marker behind broken tags, so the error is visible in Spotify,
+     * and removes markers whose error is fixed. Only writes descriptions that really change
+     */
+    private async updateErrorMarkers(
+        own_playlists: any[],
+        queue_metas: QueueMeta[],
+        log: (message: string, is_error?: boolean) => void,
+    ) {
+        const error_by_id = new Map(queue_metas.map((queue) => [queue.id, queue.target_error]));
+        for (const playlist of own_playlists) {
+            const description = this.helperService.decodeHTMLEntities(playlist.description ?? '');
+            const error = error_by_id.get(playlist.id) ?? null;
+            if (error === null && removeErrorMarker(description) === description) {
+                continue;
+            }
+            const new_description = withErrorMarker(description, error);
+            if (new_description === description) {
+                continue;
+            }
+            //Spotify allows at most 300 characters
+            if (new_description.length > 300) {
+                log(`Description of "${playlist.name}" is too long for the error marker`, true);
+                continue;
+            }
+            await this.playlistService.setPlaylistDescription(playlist.id, new_description);
+        }
     }
 
     private async getCollectItems(
@@ -320,7 +365,7 @@ export class RoutineService {
     private getNeededPlaylists(
         collect_items: CollectItem[],
         queues: QueueState[],
-        valid_target_ids: Set<string>,
+        target_ids: Set<string>,
         fallback_id: string,
     ): Set<string> {
         const needed = new Set<string>([fallback_id]);
@@ -329,11 +374,11 @@ export class RoutineService {
                 (queue) => queue.uris.has(item.uri) || queue.previous_uris?.has(item.uri),
             );
             if (related.length === 0) {
-                valid_target_ids.forEach((id) => needed.add(id));
+                target_ids.forEach((id) => needed.add(id));
             }
             related
                 .map((queue) => queue.target_id)
-                .filter((id) => valid_target_ids.has(id))
+                .filter((id): id is string => id !== null)
                 .forEach((id) => needed.add(id));
         }
         return needed;
@@ -357,6 +402,8 @@ export class RoutineService {
                 return `${plan.label}: in no queue → ${target}${already}`;
             case 'already_in_main':
                 return `${plan.label}: in no queue, already in a main → only liked`;
+            case 'queue_error':
+                return `${plan.label}: ${queue_names} has a broken tag (${plan.warning}), stays in the collect playlist until the tag is fixed`;
             case 'local_file':
                 return `${plan.label}: local file, stays in the collect playlist, please move it by hand`;
         }
@@ -373,6 +420,7 @@ export class RoutineService {
     /**
      * In a dry run only new queues are added to the cache, existing entries stay
      * otherwise the "removed by the user" info would get lost when switching to live
+     * queues with a broken tag keep everything they ever contained until the tag is fixed
      */
     private async saveCache(
         cache: RoutineCache,
@@ -384,6 +432,12 @@ export class RoutineService {
         for (const queue of queues) {
             if (is_dry_run && cache.queues[queue.id]) {
                 new_queues[queue.id] = cache.queues[queue.id];
+                continue;
+            }
+            //broken tag: forget nothing until it is fixed, so "removed by the user" still works afterwards
+            if (queue.target_id === null) {
+                const previous = cache.queues[queue.id]?.uris ?? [];
+                new_queues[queue.id] = { uris: [...new Set([...previous, ...queue.uris])] };
                 continue;
             }
             const removed = removed_by_queue.get(queue.id) ?? new Set<string>();

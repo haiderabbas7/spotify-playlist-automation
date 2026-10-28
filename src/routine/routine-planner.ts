@@ -13,7 +13,9 @@ export type CollectItem = {
 export type QueueState = {
     id: string;
     name: string;
-    target_id: string;
+    //null if the tag of the queue could not be resolved, see target_error
+    target_id: string | null;
+    target_error: string | null;
     //content now
     uris: Set<string>;
     //content at the last run, null if the queue was never seen before
@@ -23,8 +25,6 @@ export type QueueState = {
 export type PlannerInput = {
     collect_items: CollectItem[];
     queues: QueueState[];
-    //targets that exist and belong to the user
-    valid_target_ids: Set<string>;
     //contents of the loaded mains and the fallback, a playlist missing here counts as empty
     playlist_contents: Map<string, Set<string>>;
     fallback_id: string;
@@ -44,7 +44,9 @@ export type SongOrigin =
     //in no queue, but already in a main
     | 'already_in_main'
     //local file, the API cannot move it
-    | 'local_file';
+    | 'local_file'
+    //one of its queues has a broken tag, the song is left alone until the tag is fixed
+    | 'queue_error';
 
 export type SongPlan = {
     uri: string;
@@ -59,14 +61,16 @@ export type SongPlan = {
     remove_from_queue_ids: string[];
     like: boolean;
     remove_from_collect: boolean;
-    //e.g. when the target of a queue no longer exists
+    //e.g. the error of a broken queue tag
     warning: string | null;
 };
 
 export function planRoutine(input: PlannerInput): SongPlan[] {
     const plans: SongPlan[] = [];
     const seen_uris = new Set<string>();
-    const target_ids = new Set(input.queues.map((queue) => queue.target_id));
+    const target_ids = new Set(
+        input.queues.map((queue) => queue.target_id).filter((id): id is string => id !== null),
+    );
 
     for (const item of input.collect_items) {
         //the same song several times in the collect playlist is processed once
@@ -76,18 +80,7 @@ export function planRoutine(input: PlannerInput): SongPlan[] {
         seen_uris.add(item.uri);
 
         if (item.is_local || item.uri.startsWith('spotify:local:')) {
-            plans.push({
-                uri: item.uri,
-                label: item.label,
-                origin: 'local_file',
-                origin_queue_ids: [],
-                target_id: null,
-                add_to_target: false,
-                remove_from_queue_ids: [],
-                like: false,
-                remove_from_collect: false,
-                warning: 'local file, please move it by hand',
-            });
+            plans.push(untouched(item, 'local_file', [], 'local file, please move it by hand'));
             continue;
         }
 
@@ -129,23 +122,26 @@ function planSong(item: CollectItem, input: PlannerInput, target_ids: Set<string
         remove_from = [];
     }
 
+    //a broken tag in one of the involved queues: do nothing, so no song ends up in the wrong place
+    const broken_queue = origin_queues.find((queue) => queue.target_id === null);
+    if (broken_queue) {
+        return untouched(
+            item,
+            'queue_error',
+            origin_queues.map((queue) => queue.id),
+            `queue "${broken_queue.name}": ${broken_queue.target_error}`,
+        );
+    }
+
     let target_id: string | null;
-    let warning: string | null = null;
     if (origin === 'already_in_main') {
         target_id = null;
     } else if (origin === 'no_queue' || origin === 'different_projects') {
         target_id = input.fallback_id;
     } else {
         const origin_targets = [...new Set(origin_queues.map((queue) => queue.target_id))];
-        if (origin_targets.length > 1) {
-            //only possible if the user removed it from queues of different projects
-            target_id = input.fallback_id;
-        } else if (!input.valid_target_ids.has(origin_targets[0])) {
-            target_id = input.fallback_id;
-            warning = `main playlist ${origin_targets[0]} not found or not owned by you, check the tag of the queue`;
-        } else {
-            target_id = origin_targets[0];
-        }
+        //more than one target is only possible if the user removed it from queues of different projects
+        target_id = origin_targets.length === 1 ? origin_targets[0] : input.fallback_id;
     }
 
     return {
@@ -158,15 +154,117 @@ function planSong(item: CollectItem, input: PlannerInput, target_ids: Set<string
         remove_from_queue_ids: remove_from.map((queue) => queue.id),
         like: true,
         remove_from_collect: true,
-        warning,
+        warning: null,
     };
 }
 
 /**
- * Reads the target tags from a queue description, e.g. {spotify:playlist:0BfYlDPlZlFpDlJxxGNGWi} or {0BfYlDPlZlFpDlJxxGNGWi}
- * empty array: no tag, so no queue. More than one ID: invalid, the queue is skipped
+ * Plan for a song that is left completely alone (stays in the collect playlist and in its queues)
  */
-export function parseTargetTags(description: string): string[] {
-    const matches = description.matchAll(/\{\s*(?:spotify:playlist:)?([A-Za-z0-9]{22})\s*\}/g);
-    return [...new Set([...matches].map((match) => match[1]))];
+function untouched(
+    item: CollectItem,
+    origin: SongOrigin,
+    origin_queue_ids: string[],
+    warning: string,
+): SongPlan {
+    return {
+        uri: item.uri,
+        label: item.label,
+        origin,
+        origin_queue_ids,
+        target_id: null,
+        add_to_target: false,
+        remove_from_queue_ids: [],
+        like: false,
+        remove_from_collect: false,
+        warning,
+    };
+}
+
+export type PlaylistRef = { id: string; name: string };
+
+//null: no tag, so the playlist is no queue
+export type TagResult = { target_id: string } | { error: string } | null;
+
+//[T=Rock], [T=0BfYlDPlZlFpDlJxxGNGWi] or [T=spotify:playlist:0BfYlDPlZlFpDlJxxGNGWi]
+const TAG_REGEX = /\[\s*[Tt]\s*=([^\]]*)\]/g;
+//error marker the routine writes behind a broken tag, e.g. [⚠ ERROR: no playlist named "Rokc"]
+const ERROR_MARKER_REGEX = /\s*\[⚠ ERROR:[^\]]*\]/g;
+const URI_PREFIX = 'spotify:playlist:';
+
+/**
+ * Reads the [T=...] tag of a queue description and finds the main playlist it points to
+ * the value can be a playlist ID, a spotify:playlist: URI or the exact name of one of the user's playlists
+ * (spaces at the start and end are ignored, everything else has to match exactly)
+ */
+export function resolveQueueTag(
+    description: string,
+    queue_id: string,
+    playlists: PlaylistRef[],
+): TagResult {
+    const values = [
+        ...new Set([...removeErrorMarker(description).matchAll(TAG_REGEX)].map((m) => m[1].trim())),
+    ];
+    if (values.length === 0) {
+        return null;
+    }
+    if (values.length > 1) {
+        return { error: 'more than one [T=...] tag in the description' };
+    }
+    const value = values[0];
+    if (value === '') {
+        return { error: 'the tag is empty' };
+    }
+
+    let target_id: string;
+    if (value.startsWith(URI_PREFIX)) {
+        const id = value.substring(URI_PREFIX.length);
+        if (!playlists.some((playlist) => playlist.id === id)) {
+            return { error: `no own playlist with the ID "${id}"` };
+        }
+        target_id = id;
+    } else if (playlists.some((playlist) => playlist.id === value)) {
+        target_id = value;
+    } else {
+        const matches = playlists.filter((playlist) => playlist.name.trim() === value);
+        if (matches.length === 0) {
+            return { error: `no playlist named "${value}"` };
+        }
+        if (matches.length > 1) {
+            return {
+                error: `${matches.length} playlists are named "${value}", use the ID instead`,
+            };
+        }
+        target_id = matches[0].id;
+    }
+
+    if (target_id === queue_id) {
+        return { error: 'the tag points to the queue itself' };
+    }
+    return { target_id };
+}
+
+/**
+ * The description without the error markers the routine wrote earlier
+ */
+export function removeErrorMarker(description: string): string {
+    return description.replace(ERROR_MARKER_REGEX, '');
+}
+
+/**
+ * The description with an error marker directly behind the tag, or without marker if error is null
+ */
+export function withErrorMarker(description: string, error: string | null): string {
+    const clean = removeErrorMarker(description);
+    if (error === null) {
+        return clean;
+    }
+    //] would end the marker early
+    const marker = ` [⚠ ERROR: ${error.replace(/]/g, ')')}]`;
+    const tag = clean.match(new RegExp(TAG_REGEX.source));
+    if (!tag || tag.index === undefined) {
+        return clean + marker;
+    }
+    const tag_end = tag.index + tag[0].length;
+    return clean.substring(0, tag_end) + marker + clean.substring(tag_end);
 }
