@@ -33,7 +33,8 @@ The technical side of Spotify Playlist Automation. For setup and usage see the [
 
 ## Queue routine (`src/routine/`)
 
-- **Queues** are own playlists whose description contains a tag with the ID of their main playlist: `{spotify:playlist:<main-id>}` or `{<main-id>}`. Queues pointing to the same main form a project. Spotify folders are not visible through the API, so the tag is the only link.
+- **Queues** are own playlists whose description contains a `[T=...]` tag with their main playlist: an ID, a `spotify:playlist:` URI or the exact name of one of the user's own playlists (`resolveQueueTag` in `routine-planner.ts`). Queues pointing to the same main form a project. Spotify folders are not visible through the API, so the tag is the only link. Names are matched on every run against the list of own playlists, nothing is stored.
+- **Broken tags** (unknown name or ID, duplicate name, several tags, tag pointing to the queue itself): songs whose origin includes such a queue are left untouched. In live mode `[⚠ ERROR: ...]` is written behind the tag and removed again once the tag resolves. The cache of a broken queue keeps the union of everything it contained, so a song the user removed while the tag was broken is still recognized after the fix.
 - **Collect playlist** (`COLLECT_PLAYLIST_ID`) holds the songs to process. **Fallback playlist** (`FALLBACK_PLAYLIST_ID`) is used when the main is unclear.
 - **Decision rules** live in `routine-planner.ts` as a pure function and are covered by `routine-planner.spec.ts`. For each song in the collect playlist:
 
@@ -46,6 +47,7 @@ The technical side of Spotify Playlist Automation. For setup and usage see the [
 | In no queue | Fallback |
 | In no queue, but already in a main | Only liked |
 | Local file | Untouched, stays in the collect playlist (the API cannot move it) |
+| One of its queues has a broken tag | Untouched until the tag is fixed |
 
 - **Execution order** (`routine.service.ts`): like (only if not liked yet, because re-liking moves a song to the top of Liked Songs) → append to the main (no duplicates) → remove from queues → remove from the collect playlist. If a step fails for a song, its remaining steps are skipped. The song stays in the collect playlist and is retried on the next run.
 - **Memory:** `routine.json` stores the queue contents of the last run, which is how removed songs are detected. All queues are read in full on every run, because `snapshot_id` turned out to be unreliable as a change check (Spotify sometimes returned the old one for minutes after a change).

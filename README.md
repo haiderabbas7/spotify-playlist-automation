@@ -19,7 +19,7 @@ Both parts can be switched on and off independently.
 
 ### Queue routine
 
-You tell the app which playlist is a queue by putting the ID of its main playlist into the queue's description, e.g. `{spotify:playlist:0BfYlDPlZlFpDlJxxGNGWi}`. Queues with the same main belong to the same project.
+You tell the app which playlist is a queue by putting a tag with its main playlist into the queue's description, e.g. `[T=Rock]`. Queues with the same main belong to the same project.
 
 When you like a song while listening to a queue, add it to your **collect playlist**. If you also uncheck the queue in the same "Save to" dialog, the app knows exactly which queue it came from. Once a day the app then:
 
@@ -68,9 +68,19 @@ You need:
 
 ## Usage
 
-**Get a playlist ID:** in Spotify Desktop, hold **ALT**, right-click the playlist and choose **Share → Copy Spotify URI**. You get something like `spotify:playlist:0BfYlDPlZlFpDlJxxGNGWi`, the part after the last colon is the ID. Without ALT the menu only offers a link. In `.env` and in the tags both the full URI and the plain ID work.
+**Get a playlist ID:** in Spotify Desktop, hold **ALT**, right-click the playlist and choose **Share → Copy Spotify URI**. You get something like `spotify:playlist:0BfYlDPlZlFpDlJxxGNGWi`, the part after the last colon is the ID. Without ALT the menu only offers a link. In `.env` and in tags both the full URI and the plain ID work.
 
-**Mark your queues:** paste `{spotify:playlist:<id of the main playlist>}` anywhere into the description of each queue. The rest of the description is left untouched. Removing the tag turns the queue back into a normal playlist.
+**Mark your queues:** write a tag anywhere into the description of each queue. The rest of the description is left untouched. Removing the tag turns the queue back into a normal playlist.
+
+| Tag | Points to |
+|---|---|
+| `[T=Rock]` | Your playlist named exactly "Rock" (case and inner spaces count, spaces around are ignored) |
+| `[T=0BfYlDPlZlFpDlJxxGNGWi]` | The playlist with this ID |
+| `[T=spotify:playlist:0BfYlDPlZlFpDlJxxGNGWi]` | The same, as a URI |
+
+A name is quicker to type, especially on the phone. An ID keeps working when you rename the main playlist.
+
+**Broken tags:** if a tag points nowhere (unknown name or ID, two playlists with that name, more than one tag), the app writes the error right behind the tag in the description, e.g. `[T=Rokc] [⚠ ERROR: no playlist named "Rokc"]`. Songs from that queue stay untouched in the collect playlist until you fix the tag. The marker disappears on the next run after the fix, and the song is then processed as usual.
 
 **Switches** in `settings.json` (created on the first start, changes apply without a restart):
 
