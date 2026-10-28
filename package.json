@@ -1,6 +1,6 @@
 {
   "name": "spotify-playlist-automation",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Shuffles recently played Spotify playlists with weights and moves liked songs from queue playlists into their main playlist",
   "author": "haiderabbas7",
   "private": true,
