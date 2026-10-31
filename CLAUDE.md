@@ -19,6 +19,7 @@ When you change the routine's decision rules (`src/routine/routine-planner.ts`),
 ## Build and run
 
 - `npm run build` writes to `dist/src/main.js`. PM2 runs exactly that file (`scripts/start_application.bat`, started by a Windows scheduled task on boot), so rebuild after code changes and `pm2 restart spotify-playlist-automation`.
+- The scheduled task runs elevated, so after a boot the app lives in an admin PM2 daemon. `pm2` commands from a normal shell do not see it and spawn a second, empty daemon (`pm2 ls` looks empty, the app is still running). Check port 777 instead. To restart: admin shell, or the new build is picked up on the next boot.
 - Log: `logs/pm2.log`. Manual triggers while running: `http://127.0.0.1:777/shuffle`, `http://127.0.0.1:777/routine`.
 
 ## Local files (gitignored, never commit)

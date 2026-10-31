@@ -22,6 +22,8 @@ export class MainService {
 
     //all runs (routine + shuffle) are queued here one after another, so two never run at the same time
     private task_chain: Promise<void> = Promise.resolve();
+    //so "shuffling is disabled" is logged once and not every hour
+    private shuffle_disabled_logged: boolean = false;
 
     /**
      * Called once when the app starts
@@ -78,9 +80,13 @@ export class MainService {
             }
             await this.runRoutine(is_initial);
             if (!(await this.settingsService.getSettings()).shuffle_enabled) {
-                this.helperService.printWithTimestamp('Shuffling is disabled in settings.json');
+                if (!this.shuffle_disabled_logged) {
+                    this.helperService.printWithTimestamp('Shuffling is disabled in settings.json');
+                    this.shuffle_disabled_logged = true;
+                }
                 return;
             }
+            this.shuffle_disabled_logged = false;
             try {
                 await this.shuffleListenedPlaylists(is_initial);
             } catch (error) {
