@@ -60,7 +60,7 @@ export class LowDbService {
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
 
         if (!playlist) {
-            throw new Error(`Playlist mit der ID ${playlist_id} wurde nicht gefunden.`);
+            throw new Error(`Playlist with ID ${playlist_id} not found.`);
         }
         return playlist.snapshot_id;
     }
@@ -72,7 +72,7 @@ export class LowDbService {
         const db = await this.getDB();
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
         if (!playlist) {
-            throw new Error(`Playlist mit der ID ${playlist_id} wurde nicht gefunden.`);
+            throw new Error(`Playlist with ID ${playlist_id} not found.`);
         }
         playlist.snapshot_id = snapshot_id;
         await db.write();
@@ -86,7 +86,7 @@ export class LowDbService {
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
 
         if (!playlist) {
-            throw new Error(`Playlist mit der ID ${playlist_id} wurde nicht gefunden.`);
+            throw new Error(`Playlist with ID ${playlist_id} not found.`);
         }
         playlist.tracks.push({ uri: uri, weight: weight });
         await db.write();
@@ -100,13 +100,13 @@ export class LowDbService {
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
 
         if (!playlist) {
-            throw new Error(`Playlist mit der ID ${playlist_id} nicht gefunden.`);
+            throw new Error(`Playlist with ID ${playlist_id} not found.`);
         }
 
         const track = playlist.tracks.find((track) => track.uri === uri);
 
         if (!track) {
-            throw new Error(`Track mit der URI ${uri} nicht gefunden.`);
+            throw new Error(`Track with URI ${uri} not found.`);
         }
 
         track.weight = weight;
@@ -121,7 +121,7 @@ export class LowDbService {
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
 
         if (!playlist) {
-            throw new Error(`Playlist mit der ID ${playlist_id} wurde nicht gefunden.`);
+            throw new Error(`Playlist with ID ${playlist_id} not found.`);
         }
 
         return playlist.tracks || [];
@@ -133,13 +133,13 @@ export class LowDbService {
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
 
         if (!playlist) {
-            throw new Error(`Playlist mit der ID ${playlist_id} wurde nicht gefunden.`);
+            throw new Error(`Playlist with ID ${playlist_id} not found.`);
         }
 
         const trackIndex = playlist.tracks.findIndex((track) => track.uri === uri);
 
         if (trackIndex === -1) {
-            throw new Error(`Track mit der URI ${uri} wurde nicht gefunden.`);
+            throw new Error(`Track with URI ${uri} not found.`);
         }
 
         // remove the track from the playlist
@@ -155,7 +155,7 @@ export class LowDbService {
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
 
         if (!playlist) {
-            throw new Error(`Playlist mit der ID ${playlist_id} wurde nicht gefunden.`);
+            throw new Error(`Playlist with ID ${playlist_id} not found.`);
         }
 
         return playlist.last_shuffled_tracks || [];
@@ -169,7 +169,7 @@ export class LowDbService {
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
 
         if (!playlist) {
-            throw new Error(`Playlist mit der ID ${playlist_id} wurde nicht gefunden.`);
+            throw new Error(`Playlist with ID ${playlist_id} not found.`);
         }
         playlist.last_shuffled_tracks = [];
         await db.write();
@@ -183,7 +183,7 @@ export class LowDbService {
         const playlist = db.data.playlists.find((playlist) => playlist.playlist_id === playlist_id);
 
         if (!playlist) {
-            throw new Error(`Playlist mit der ID ${playlist_id} wurde nicht gefunden.`);
+            throw new Error(`Playlist with ID ${playlist_id} not found.`);
         }
         playlist.last_shuffled_tracks.push({ uri: uri, weight: weight });
         await db.write();
