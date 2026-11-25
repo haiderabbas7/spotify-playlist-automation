@@ -73,5 +73,13 @@
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
+  },
+  "overrides": {
+    "@nestjs/cli": {
+      "glob": "^14.0.6"
+    },
+    "@swc/cli": {
+      "minimatch": "^11.0.9"
+    }
   }
 }
