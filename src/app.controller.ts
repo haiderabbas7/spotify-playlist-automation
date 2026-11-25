@@ -1,13 +1,28 @@
-import { Controller, Get, Redirect, Req } from '@nestjs/common';
+import {
+    Controller,
+    Get,
+    HttpCode,
+    Param,
+    Post,
+    Query,
+    Redirect,
+    Req,
+    ServiceUnavailableException,
+} from '@nestjs/common';
 import { Request } from 'express';
-import { AuthService } from './auth/auth.service';
+import { AuthService, LoginRequiredError } from './auth/auth.service';
 import { MainService } from './main/main.service';
+import { RandomAlbumService } from './random-album/random-album.service';
+import { HelperService } from './helper/helper.service';
+import { getRandomAlbumPage } from './random-album/random-album-page';
 
 @Controller()
 export class AppController {
     constructor(
         private readonly authService: AuthService,
         private readonly mainService: MainService,
+        private readonly randomAlbumService: RandomAlbumService,
+        private readonly helperService: HelperService,
     ) {}
 
     /**
@@ -52,6 +67,45 @@ export class AppController {
     routine() {
         void this.mainService.startRoutineNow();
         return this.getHTMLPage('Routine started, check the log 👀');
+    }
+
+    /**
+     * Route /random-album: page that shows a random album from the saved albums
+     */
+    @Get('/random-album')
+    randomAlbumPage() {
+        return getRandomAlbumPage();
+    }
+
+    /**
+     * Picks the next random album for the page, as JSON
+     * ?exclude=<album id>: never pick this album (the one on screen), ?reload=1: reload the library and clear all blocks
+     */
+    @Post('/random-album/next')
+    @HttpCode(200)
+    async nextRandomAlbum(@Query('exclude') exclude?: string, @Query('reload') reload?: string) {
+        try {
+            return await this.randomAlbumService.pickNext(exclude || null, reload === '1');
+        } catch (error) {
+            this.helperService.printWithTimestamp(
+                `[RandomAlbum] Picking an album failed: ${String(error)}`,
+                true,
+            );
+            throw new ServiceUnavailableException(
+                error instanceof LoginRequiredError
+                    ? 'Not logged in to Spotify, open / to log in'
+                    : 'Could not load your albums from Spotify, check the log',
+            );
+        }
+    }
+
+    /**
+     * Releases the 8 hour block of an album, used by the "Back" button
+     */
+    @Post('/random-album/unblock/:album_id')
+    @HttpCode(200)
+    unblockRandomAlbum(@Param('album_id') album_id: string) {
+        return this.randomAlbumService.unblock(album_id);
     }
 
     /**

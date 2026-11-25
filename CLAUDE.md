@@ -2,7 +2,7 @@
 
 Repository: `spotify-playlist-automation` (the local folder can stay `spotify-shuffler`; if it is renamed, point the Windows scheduled task to the new `scripts/start_application.bat`).
 
-NestJS app that runs in the background on the owner's Windows PC (PM2) and talks to the Spotify Web API. Two independent modules: the **shuffler** (weighted shuffle of recently played playlists) and the **queue routine** (moves songs from the collect playlist BEHALTEN into Liked Songs and the main playlist of their queue).
+NestJS app that runs in the background on the owner's Windows PC (PM2) and talks to the Spotify Web API. Two independent modules: the **shuffler** (weighted shuffle of recently played playlists) and the **queue routine** (moves songs from the collect playlist BEHALTEN into Liked Songs and the main playlist of their queue). Plus the read-only **random album picker** page (`/random-album`).
 
 ## Before every commit (mandatory)
 
@@ -20,7 +20,7 @@ When you change the routine's decision rules (`src/routine/routine-planner.ts`),
 
 - `npm run build` writes to `dist/src/main.js`. PM2 runs exactly that file (`scripts/start_application.bat`, started by a Windows scheduled task on boot), so rebuild after code changes and `pm2 restart spotify-playlist-automation`.
 - The scheduled task runs elevated, so after a boot the app lives in an admin PM2 daemon. `pm2` commands from a normal shell do not see it and spawn a second, empty daemon (`pm2 ls` looks empty, the app is still running). Check port 777 instead. To restart: admin shell, or the new build is picked up on the next boot.
-- Log: `logs/pm2.log`. Manual triggers while running: `http://127.0.0.1:777/shuffle`, `http://127.0.0.1:777/routine`.
+- Log: `logs/pm2.log`. Manual triggers while running: `http://127.0.0.1:777/shuffle`, `http://127.0.0.1:777/routine`. Read-only random album page: `http://127.0.0.1:777/random-album` (`src/random-album/`, decision logic in `random-album-picker.ts` with tests).
 
 ## Local files (gitignored, never commit)
 

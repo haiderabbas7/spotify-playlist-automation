@@ -15,6 +15,10 @@ This app fixes both:
 
 Both parts can be switched on and off independently.
 
+And for when you can't decide what to listen to:
+
+- **Random album picker:** a small web page that picks a random album from your saved albums, with a Spotify player right next to it.
+
 ## What it does
 
 ### Queue routine
@@ -33,6 +37,15 @@ If the main playlist is unclear (the song is in queues of different projects, or
 ### Shuffler
 
 Every hour the app looks at what you played. For each of your own playlists you listened to, it reorders the first 45 songs with a weighted random pick. Songs that were at the top last time lose weight, all others slowly gain weight. The playlist you are currently listening to is left alone.
+
+### Random album picker
+
+Open `http://127.0.0.1:777/random-album` while the app is running (from your phone too, with your computer's IP in the same network). It picks from **all** your saved albums, singles and EPs included, and shows the cover, artist, year, track count and the date you saved it, plus links to the Spotify app and web player and an embedded Spotify player.
+
+- **No repeats for 8 hours:** every album you were shown is skipped for the next 8 hours, across tabs and devices.
+- **Older favorites first:** albums saved in the last 3 weeks come up half as often as older ones, so the ones you forgot about get their turn.
+- **🎲 Another one** picks the next album, **← Back** goes back one (and makes it pickable again), **↻ Refresh library** loads your albums again and makes all of them pickable.
+- Your library is cached for 24 hours, so clicking through is instant. The page only reads from Spotify and never changes anything.
 
 ## Is this for you?
 
@@ -100,6 +113,8 @@ A name is quicker to type, especially on the phone. An ID keeps working when you
 
 **Run something right now** while the app is running: open `http://127.0.0.1:777/routine` or `http://127.0.0.1:777/shuffle`.
 
+**Random album:** open `http://127.0.0.1:777/random-album`, see [Random album picker](#random-album-picker).
+
 ## Limitations
 
 - **Local files** cannot be moved through the Spotify API. They stay in the collect playlist and have to be sorted by hand.
@@ -125,7 +140,7 @@ npm run build                       # build to dist/src/main.js
 ```
 
 - Log: `logs/pm2.log` (`scripts/reset_logs.bat` empties it on Windows).
-- Manual triggers while running: `GET /shuffle`, `GET /routine`.
+- Manual triggers while running: `GET /shuffle`, `GET /routine`. Random album page: `GET /random-album`.
 - After code changes: `npm run build`, then `pm2 restart spotify-playlist-automation`.
 
 ## License

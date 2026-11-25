@@ -54,6 +54,15 @@ The technical side of Spotify Playlist Automation. For setup and usage see the [
 - **Dry run:** with `routine_dry_run: true` the routine only logs what it would do.
 - A run reads every queue, so it needs roughly 100 API calls with ~50 queues. Once a day this is far below any rate limit.
 
+## Random album page (`src/random-album/`)
+
+- `GET /random-album` serves a static page. Its script asks `POST /random-album/next` for an album (JSON) and renders it, so the page shows a spinner while the library loads.
+- **Preloading:** before a new album is shown, its cover is decoded and the Spotify embed is loaded into a second, hidden iframe (at most 4 seconds). Then text, cover and player change at once and the old iframe is emptied, so nothing keeps playing in the background.
+- **Library cache:** all saved albums are loaded with `GET me/albums` (50 per page, all pages) and kept in memory. The list is loaded again on the first pick after 24 hours or with `?reload=1`. Parallel requests share one load. If a reload fails, the old list is used for another 10 minutes and the page shows a warning.
+- **Pick** (`random-album-picker.ts`): weighted roulette (`HelperService.getWeightedRandom`, the same one the shuffler uses). Albums saved in the last 3 weeks get weight 1, older ones weight 2. The album currently on screen (`?exclude=`) is never picked.
+- **8 hour block:** every picked album is blocked for 8 hours, in memory on the server, so it holds across tabs and devices but not across restarts. If every album is blocked, all blocks are cleared except the one of the album on screen. "Back" calls `POST /random-album/unblock/:id` for the album it goes back to. "Refresh library" clears all blocks once the reload worked.
+- Read-only: the page never writes to Spotify. It needs the `user-library-read` scope.
+
 ## Local files
 
 | File | Content |

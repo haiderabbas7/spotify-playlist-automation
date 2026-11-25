@@ -14,6 +14,7 @@ import { SpotifyApiService } from './spotify-api/spotify-api.service';
 import { LowDbService } from './low-db/low-db.service';
 import { SettingsService } from './settings/settings.service';
 import { RoutineService } from './routine/routine.service';
+import { RandomAlbumService } from './random-album/random-album.service';
 
 @Module({
     imports: [
@@ -36,6 +37,7 @@ import { RoutineService } from './routine/routine.service';
         LowDbService,
         SettingsService,
         RoutineService,
+        RandomAlbumService,
     ],
 })
 export class AppModule {}
